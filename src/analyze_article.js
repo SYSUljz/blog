@@ -3,7 +3,7 @@ function analyze_article(markdown, article_filename, default_author) {
   const match = article_filename.match(/^\[([^\]]+)\]/);
   if (match) {
     info = match[1].split(' ');
-    article_filename = article_filename.replace(/^\[([^\]]+)\]/, '');
+    article_filename = article_filename.replace(/^\[([^\]]+)\]/, '').trim();
   }
   let [date, tags_string, author] = info;
 

@@ -179,7 +179,7 @@ async function main() {
       articles_info.push(article);
     }
 
-    const html_path = join(config.output_path, article.url_path);
+    const html_path = join(config.output_path, article_dir, html_filename);
     await write_when_change(html_path, render_result);
   }));
 
