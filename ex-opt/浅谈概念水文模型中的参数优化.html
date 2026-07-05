@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" href="/blog/dist/favicon.ico">
+    <link rel="apple-touch-icon" href="/blog/dist/favicon.png">
+    <link rel="stylesheet" type="text/css" href="/blog/dist/highlight.css">
+    <link rel="stylesheet" type="text/css" href="/blog/dist/katex.min.css">
+    <link rel="stylesheet" type="text/css" href="/blog/dist/main.css">
+    <title>浅谈概念水文模型中的参数优化 | Jack-Li's Blog</title>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-GQ26H3JQ3G"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-GQ26H3JQ3G');
+    </script>
+  </head>
+  <body>
+    <div class="app">
+      <div class="title">
+        <h1> 浅谈概念水文模型中的参数优化 </h1>
+      </div>
+      <div class="info">
+        <div class="date"> 2026.07.05 </div>
+        <a href="https://github.com/jack-li">
+          <div class="author"> jack-li </div>
+        </a>
+      </div>
+      <div class="markdown">
+        <p>从最早的新安江模型、到后来的SWAT模型再到今天最新的可微分的水文模型，如何平衡水文模型中的计算公式的严谨性、科学性和模型整体的实用性，一直是模型构建过程中必须要深度思考的一点。<br>
+过分考虑模型计算过程的科学性比如强调对蒸散发及下渗与地下水产流的空间异质性建模、又或者过于强调汇流过程的复杂水动力学建模都会导致输入数据难以收集、模型运行计算时间变长，最终导致模型易用性变差，阻碍模型的推广使用。<br>
+以可微分水文模型为代表的模型如δHBV，则走向了另一条道路，对物理计算机制进行进一步概化，换取更强的可并行性与迁移性，如在δHBV中为了保证模拟过程可以迁移到Pytorch上进行可微分计算，汇流过程只使用了隐式单位线方法或者是马斯金根-康吉汇流，产流过程则是直接使用了HBV集总式模型，让整个模型都可以在写成Pytorch计算，在GPU上进行</p>
+
+      </div>
+      <script src="https://giscus.app/client.js"
+      data-repo="SYSUljz/blog"
+      data-repo-id="MDEwOlJlcG9zaXRvcnk4MDc5ODgwNg=="
+      data-category="Announcements"
+      data-category-id="DIC_kwDOBNDkVs4CA6GQ"
+      data-mapping="title"
+      data-reactions-enabled="0"
+      data-emit-metadata="0"
+      data-input-position="bottom"
+      data-theme="preferred_color_scheme"
+      data-lang="en"
+      crossorigin="anonymous"
+      async>
+    </script>
+      <div class="footer">
+        <div class="license">
+          Except where otherwise noted, content on this site is licensed under a <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> license.
+        </div>
+        <div class="copyright">
+          Copyright©2017 SYSUljz, All Rights Reserved. Powered by <a href="https://pages.github.com/">GitHub Pages</a> and <a href="https://github.com/features/actions">GitHub Actions</a>.
+        </div>
+      </div>
+    </div>
+    <script src="/blog/dist/main.js"></script>
+  </body>
+</html>
