@@ -1,19 +1,27 @@
-# Jack-Li's Blog [![Deploy](https://github.com/SYSUljz/SYSUljz.github.io/workflows/Deploy/badge.svg)](https://github.com/Jack-Li/Jack-Li.github.io/actions)
+# Jack-Li's Blog [![Deploy](https://github.com/SYSUljz/blog/actions/workflows/deploy.yml/badge.svg)](https://github.com/SYSUljz/blog/actions)
 
 > A static blog based on GitHub Pages, GitHub Actions and Node.js.
 
+## Live Website
+
+My blog is hosted at: **[https://sysuljz.github.io/blog/](https://sysuljz.github.io/blog/)**
+
+---
+
 ## Build
 
-Node 10 or later is required.
+Node.js (version 20 or later recommended) is required.
 
-``` bash
+```bash
 # install dependencies
 npm install
 
-# generate site
+# generate site locally
 npm run build
 ```
 
 ## RSS Feed
 
-The build process automatically generates an RSS feed at `public/rss.xml` containing the latest 20 articles. The RSS feed URL is: https://SYSUljz.github.io/rss.xml
+The build process automatically generates an RSS feed at `public/rss.xml` containing the latest 20 articles. 
+
+The RSS feed URL is: **[https://sysuljz.github.io/blog/rss.xml](https://sysuljz.github.io/blog/rss.xml)**
