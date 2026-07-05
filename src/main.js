@@ -81,6 +81,7 @@ ${items}
 
 async function main() {
   const config = JSON.parse(await fs.readFile('./config.json'));
+  const base_path = config.base_path || '';
 
   const { dirs, articles_path } =
     await list_articles(config.posts_path, config.article_format);
@@ -164,14 +165,15 @@ async function main() {
       article: article.html,
       comment: comment,
       web_master: config.web_master,
-      google_analytics_id: config.google_analytics_id
+      google_analytics_id: config.google_analytics_id,
+      base_path: base_path
     };
     const render_result = mustache.render(article_template, view);
 
     delete article.html;
     delete article.markdown;
     const html_filename = article.filename + (hidden ? '.htm' : '.html');
-    article.url_path = join('/', article_dir, html_filename);
+    article.url_path = join('/', base_path, article_dir, html_filename);
 
     if (!hidden) {
       articles_info.push(article);
@@ -191,14 +193,15 @@ async function main() {
   const index_template_name = './src/card.html';
   const index_template = (await fs.readFile(index_template_name)).toString();
   const index_result =
-    mustache.render(index_template, { articles: articles_info });
+    mustache.render(index_template, { articles: articles_info, base_path: base_path });
 
   const view = {
     title_string: config.site_name,
     title: config.site_name,
     article: index_result,
     web_master: config.web_master,
-    google_analytics_id: config.google_analytics_id
+    google_analytics_id: config.google_analytics_id,
+    base_path: base_path
   };
   const render_result = mustache.render(article_template, view);
   const html_path = join(config.output_path, 'index.html');

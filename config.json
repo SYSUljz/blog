@@ -1,15 +1,16 @@
 {
   "site_name": "Jack-Li's Blog",
-  "site_url": "https://SYSUljz.github.io",
+  "site_url": "https://SYSUljz.github.io/blog",
   "site_description": "Jack-Li's Blog",
   "site_language": "zh-CN",
+  "base_path": "/blog",
   "posts_path": "posts",
   "output_path": "public",
   "profile_path": "profile",
   "article_format": "md",
   "default_author": "SYSUljz",
   "web_master": "SYSUljz",
-  "github_repo": "SYSUljz/SYSUljz.github.io",
+  "github_repo": "SYSUljz/blog",
   "github_repo_id": "MDEwOlJlcG9zaXRvcnk4MDc5ODgwNg==",
   "google_analytics_id": "G-GQ26H3JQ3G"
 }
