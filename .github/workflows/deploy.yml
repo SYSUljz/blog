@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   push:
-    branches: [ blog ]
+    branches: [ main ]
 
 jobs:
   build:
@@ -15,7 +15,7 @@ jobs:
         fetch-depth: 8
 
     - name: 🪞Mirror
-      run: git config --global credential.username "SYSUljz" && git push -f https://SYSUljz:${{ secrets.GITLAB }}@gitlab.com/SYSUljz/SYSUljz.gitlab.io.git blog
+      run: git config --global credential.username "SYSUljz" && git push -f https://SYSUljz:${{ secrets.GITLAB }}@gitlab.com/SYSUljz/SYSUljz.gitlab.io.git main:blog
 
     - name: 🏗Generate
       run: npm i && npm run build
