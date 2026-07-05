@@ -4,6 +4,9 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,6 +18,7 @@ jobs:
         fetch-depth: 8
 
     - name: 🪞Mirror
+      continue-on-error: true
       run: git config --global credential.username "SYSUljz" && git push -f https://SYSUljz:${{ secrets.GITLAB }}@gitlab.com/SYSUljz/SYSUljz.gitlab.io.git main:blog
 
     - name: 🏗Generate
@@ -23,12 +27,13 @@ jobs:
     - name: 🚀Deploy
       uses: JamesIves/github-pages-deploy-action@v4
       with:
-        token: ${{ secrets.TOKEN }}
+        token: ${{ secrets.GITHUB_TOKEN }}
         branch: master
         folder: public
 
     - name: 🚀Deploy
       uses: JamesIves/github-pages-deploy-action@v4
+      continue-on-error: true
       with:
         repository-name: SYSUljz/SYSUljz
         token: ${{ secrets.TOKEN }}
