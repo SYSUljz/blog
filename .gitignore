@@ -1,7 +1,7 @@
 # Custom
 /public
 /profile
-/posts/images
+# /posts/images
 
 # macOS
 .DS_Store
