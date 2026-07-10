@@ -5,8 +5,16 @@
     <link>https://SYSUljz.github.io/blog</link>
     <description>Jack-Li&apos;s Blog</description>
     <language>zh-CN</language>
-    <lastBuildDate>Fri, 10 Jul 2026 06:49:00 GMT</lastBuildDate>
+    <lastBuildDate>Fri, 10 Jul 2026 07:07:29 GMT</lastBuildDate>
     <atom:link href="https://SYSUljz.github.io/blog/rss.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>ex-opt 之前的故事</title>
+      <link>https://SYSUljz.github.io/blog/blog/ex-opt/ex-opt 之前的故事.html</link>
+      <guid isPermaLink="true">https://SYSUljz.github.io/blog/blog/ex-opt/ex-opt 之前的故事.html</guid>
+      <pubDate>Fri, 10 Jul 2026 00:00:00 GMT</pubDate>
+      <dc:creator>jack-li</dc:creator>
+      <category>ex-opt</category>
+    </item>
     <item>
       <title>Rust及 C++ 异步库的计时器实现</title>
       <link>https://SYSUljz.github.io/blog/blog/网络编程/各编程语言及cpp异步库的计时器实现.html</link>
@@ -14,14 +22,6 @@
       <pubDate>Mon, 06 Jul 2026 00:00:00 GMT</pubDate>
       <dc:creator>jack-li</dc:creator>
       <category>网络编程</category>
-    </item>
-    <item>
-      <title>ex-opt 之前的故事</title>
-      <link>https://SYSUljz.github.io/blog/blog/ex-opt/ex-opt 之前的故事.html</link>
-      <guid isPermaLink="true">https://SYSUljz.github.io/blog/blog/ex-opt/ex-opt 之前的故事.html</guid>
-      <pubDate>Sun, 05 Jul 2026 00:00:00 GMT</pubDate>
-      <dc:creator>jack-li</dc:creator>
-      <category>ex-opt</category>
     </item>
     <item>
       <title>浅谈概念水文模型中的参数优化</title>
