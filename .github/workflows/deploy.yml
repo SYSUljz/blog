@@ -30,12 +30,3 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         branch: master
         folder: public
-
-    - name: 🚀Deploy
-      uses: JamesIves/github-pages-deploy-action@v4
-      continue-on-error: true
-      with:
-        repository-name: SYSUljz/SYSUljz
-        token: ${{ secrets.TOKEN }}
-        branch: master
-        folder: profile
