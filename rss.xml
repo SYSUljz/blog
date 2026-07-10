@@ -5,12 +5,20 @@
     <link>https://SYSUljz.github.io/blog</link>
     <description>Jack-Li&apos;s Blog</description>
     <language>zh-CN</language>
-    <lastBuildDate>Sun, 05 Jul 2026 09:04:46 GMT</lastBuildDate>
+    <lastBuildDate>Fri, 10 Jul 2026 06:49:00 GMT</lastBuildDate>
     <atom:link href="https://SYSUljz.github.io/blog/rss.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title>为什么要写一个 ex-opt</title>
-      <link>https://SYSUljz.github.io/blog/blog/ex-opt/为什么要写ex-opt.html</link>
-      <guid isPermaLink="true">https://SYSUljz.github.io/blog/blog/ex-opt/为什么要写ex-opt.html</guid>
+      <title>Rust及 C++ 异步库的计时器实现</title>
+      <link>https://SYSUljz.github.io/blog/blog/网络编程/各编程语言及cpp异步库的计时器实现.html</link>
+      <guid isPermaLink="true">https://SYSUljz.github.io/blog/blog/网络编程/各编程语言及cpp异步库的计时器实现.html</guid>
+      <pubDate>Mon, 06 Jul 2026 00:00:00 GMT</pubDate>
+      <dc:creator>jack-li</dc:creator>
+      <category>网络编程</category>
+    </item>
+    <item>
+      <title>ex-opt 之前的故事</title>
+      <link>https://SYSUljz.github.io/blog/blog/ex-opt/ex-opt 之前的故事.html</link>
+      <guid isPermaLink="true">https://SYSUljz.github.io/blog/blog/ex-opt/ex-opt 之前的故事.html</guid>
       <pubDate>Sun, 05 Jul 2026 00:00:00 GMT</pubDate>
       <dc:creator>jack-li</dc:creator>
       <category>ex-opt</category>
@@ -24,12 +32,12 @@
       <category>ex-opt</category>
     </item>
     <item>
-      <title>Hi🙋‍♂️这里是jack li 的博客，记录学习工作中的思考</title>
+      <title>Hi🙋‍♂️这里是jack li 的博客</title>
       <link>https://SYSUljz.github.io/blog/blog/helloworld/first blog.html</link>
       <guid isPermaLink="true">https://SYSUljz.github.io/blog/blog/helloworld/first blog.html</guid>
       <pubDate>Mon, 29 Jun 2026 00:00:00 GMT</pubDate>
       <dc:creator>jack-li</dc:creator>
-      <category>test</category>
+      <category>about-me</category>
     </item>
   </channel>
 </rss>

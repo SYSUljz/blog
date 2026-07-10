@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" href="/blog/dist/favicon.ico">
+    <link rel="apple-touch-icon" href="/blog/dist/favicon.png">
+    <link rel="stylesheet" type="text/css" href="/blog/dist/highlight.css">
+    <link rel="stylesheet" type="text/css" href="/blog/dist/katex.min.css">
+    <link rel="stylesheet" type="text/css" href="/blog/dist/main.css">
+    <title>ex-opt 之前的故事 | Jack-Li's Blog</title>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-GQ26H3JQ3G"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-GQ26H3JQ3G');
+    </script>
+  </head>
+  <body>
+    <div class="app">
+      <div class="title">
+        <h1> ex-opt 之前的故事 </h1>
+      </div>
+      <div class="info">
+        <div class="date"> 2026.07.05 </div>
+        <a href="https://github.com/jack-li">
+          <div class="author"> jack-li </div>
+        </a>
+      </div>
+      <div class="markdown">
+        <p>正如上文所述，对于流溪河模型，我们需要使用 PSO（粒子群优化）等算法进行参数优选。优化速度越快，意味着我们能在相同时间内搜索越广阔的参数空间，计算网格相应的也可以设定的更精细。因此，对参数优选引擎进行持续的性能优化至关重要。</p>
+<p>课题组以往的程序均使用 Java 编写，且都在单机上运行，未考虑集群并行。听闻很早之前为了在超算中心上运行流溪河模型，专门邀请过计算机系的团队重写过一版能分布式运行的模型（推测是基于 MPI 实现的分布式），但由于难以维护，很快就被放弃。因此，分布式系统的参数优选问题迟迟没有得到解决。</p>
+<p>为进一步提高整体的计算效率，笔者于 2026 年初将整个计算流程使用 C++ 重写。主要原因在于：<s>C++ 更适合重计算的编程场景</s>，其实是本人更喜欢 C++ 语言。之后的时间里，笔者一直在思考如何优雅地实现分布式的参数优选。个人认为，这个优选系统应当具备以下特点：</p>
+<ul>
+<li><strong>易用与非侵入式设计</strong>：即使是没有多线程并发、分布式系统开发经验的开发者也能快速上手使用。</li>
+<li><strong>框架轻量化</strong>：尽可能适配不同的业务场景，且易于调试与排错。</li>
+</ul>
+<h2 id="ex-actor" tabindex="-1"><a href="#ex-actor"><a href="https://github.com/ex-actor/ex-actor">ex-actor</a></a></h2>
+<p><code>ex-actor</code> 是一个基于 C++26 P2300 <code>std::execution</code>（当前基于其 C++20 早期实现 <code>stdexec</code>）的现代 C++ Actor 模式框架。只需一行代码，就可以将一个普通的 C++ 类转换为一个有状态的异步服务。</p>
+<p>经过深入调研，<code>ex-actor</code> 完美契合了我们对分布式框架的需求。经过一个月的架构设计与编码实现，<a href="https://github.com/SYSUljz/ex-opt">ex-opt</a> 应运而生 —— 这是一个通用的 C++ 分布式超参数优选框架。</p>
+<h2 id="什么是-ex-opt" tabindex="-1"><a href="#%E4%BB%80%E4%B9%88%E6%98%AF-ex-opt">什么是 ex-opt</a></h2>
+<p><code>ex-opt</code> 是一个用现代 C++20 编写的高性能、异步和分布式黑盒优化框架。</p>
+<h3 id="核心设计与技术栈" tabindex="-1"><a href="#%E6%A0%B8%E5%BF%83%E8%AE%BE%E8%AE%A1%E4%B8%8E%E6%8A%80%E6%9C%AF%E6%A0%88">核心设计与技术栈</a></h3>
+<ul>
+<li><strong>执行模型 (stdexec)</strong>：采用 Sender/Receiver 结构化并发模型，提供极低开销的无锁任务调度和线程池管理。</li>
+<li><strong>分布式 Actor 框架 (ex-actor)</strong>：评估任务被封装为分布式 Actor。无论是本地多线程评估还是跨机器的分布式集群评估，共享完全相同的代码和编程接口。</li>
+<li><strong>ZeroMQ 通信</strong>：使用 <code>EX_OPT_REGISTER_DISTRIBUTED</code> 宏即可自动为自定义目标函数生成 RPC 接口，实现集群内节点间的高效通信。</li>
+</ul>
+<h3 id="核心特性" tabindex="-1"><a href="#%E6%A0%B8%E5%BF%83%E7%89%B9%E6%80%A7">核心特性</a></h3>
+<ol>
+<li><strong>统一的优化接口</strong>：提供 <code>ex_opt::optimize</code> 统一同步接口，无论本地运行还是分布式集群运行，用户都无需关心底层的异步调度与通信逻辑。</li>
+<li><strong>流水线调度模式</strong>：
+<ul>
+<li><strong>Batch 模式</strong>：适用于 GA、PSO 等群体算法，支持整代参数的并行评估。</li>
+<li><strong>Stream 模式</strong>：适用于 SA 等顺序搜索算法，空闲 Worker 随完随补，避免个别 Worker 因计算长尾导致整体停滞。</li>
+</ul>
+</li>
+<li><strong>算法与执行解耦</strong>：算法决策策略（<code>Policy</code>）和模拟计算器（<code>WorkerActor</code>）之间完全解耦。</li>
+</ol>
+
+      </div>
+      <script src="https://giscus.app/client.js"
+      data-repo="SYSUljz/blog"
+      data-repo-id="MDEwOlJlcG9zaXRvcnk4MDc5ODgwNg=="
+      data-category="Announcements"
+      data-category-id="DIC_kwDOBNDkVs4CA6GQ"
+      data-mapping="title"
+      data-reactions-enabled="0"
+      data-emit-metadata="0"
+      data-input-position="bottom"
+      data-theme="preferred_color_scheme"
+      data-lang="en"
+      crossorigin="anonymous"
+      async>
+    </script>
+      <div class="footer">
+        <div class="license">
+          Except where otherwise noted, content on this site is licensed under a <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> license.
+        </div>
+        <div class="copyright">
+          Copyright©2017 SYSUljz, All Rights Reserved. Powered by <a href="https://pages.github.com/">GitHub Pages</a> and <a href="https://github.com/features/actions">GitHub Actions</a>.
+        </div>
+      </div>
+    </div>
+    <script src="/blog/dist/main.js"></script>
+  </body>
+</html>
