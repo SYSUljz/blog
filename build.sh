@@ -17,3 +17,7 @@ cp ./node_modules/prismjs/themes/prism-tomorrow.css public/dist/highlight.css
 # KaTeX
 cp ./node_modules/katex/dist/katex.min.css public/dist
 cp -r ./node_modules/katex/dist/fonts public/dist
+
+# Create a symlink for local testing (resolves the /blog base path locally)
+rm -f public/blog
+ln -sf . public/blog
