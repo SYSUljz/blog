@@ -19,29 +19,57 @@
   </head>
   <body>
     <div class="app">
-      <div class="title">
-        <h1> {{{ title }}} </h1>
+      <header class="header">
+        <a href="{{{ base_path }}}/" class="site-title">{{{ site_name }}}</a>
+      </header>
+
+      <div class="container">
+        <aside class="sidebar">
+          <div class="sidebar-title">分类目录</div>
+          <nav>
+            <ul>
+              <li>
+                <a href="{{{ base_path }}}/" class="category-link" data-tag="">全部文章</a>
+              </li>
+              {{#categories}}
+              <li>
+                <a href="{{{ base_path }}}/#/{{.}}" class="category-link" data-tag="{{.}}">{{.}}</a>
+              </li>
+              {{/categories}}
+            </ul>
+          </nav>
+        </aside>
+
+        <main class="content">
+          {{^is_index}}
+          <div class="title">
+            <h1> {{{ title }}} </h1>
+          </div>
+          {{#author}}
+          <div class="info">
+            <div class="date"> {{{ date }}} </div>
+            <a href="https://github.com/{{{ author }}}">
+              <div class="author"> {{{ author }}} </div>
+            </a>
+          </div>
+          {{/author}}
+          {{/is_index}}
+
+          <div class="markdown">
+            {{{ article }}}
+          </div>
+          {{{ comment }}}
+        </main>
       </div>
-      {{#author}}
-      <div class="info">
-        <div class="date"> {{{ date }}} </div>
-        <a href="https://github.com/{{{ author }}}">
-          <div class="author"> {{{ author }}} </div>
-        </a>
-      </div>
-      {{/author}}
-      <div class="markdown">
-        {{{ article }}}
-      </div>
-      {{{ comment }}}
-      <div class="footer">
+
+      <footer class="footer">
         <div class="license">
           Except where otherwise noted, content on this site is licensed under a <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> license.
         </div>
         <div class="copyright">
           Copyright©2017 {{{ web_master }}}, All Rights Reserved. Powered by <a href="https://pages.github.com/">GitHub Pages</a> and <a href="https://github.com/features/actions">GitHub Actions</a>.
         </div>
-      </div>
+      </footer>
     </div>
     <script src="{{{ base_path }}}/dist/main.js"></script>
   </body>

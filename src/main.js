@@ -94,7 +94,8 @@ async function main() {
   const article_template_name = './src/article.html';
   const article_template = (await fs.readFile(article_template_name)).toString();
 
-  let articles_info = [];
+  // Pass 1: Parse all articles and gather information
+  let all_articles = [];
   await Promise.all(articles_path.map(async article_path => {
     const article_dir = dirname(article_path);
     const article_filename =
@@ -140,12 +141,35 @@ async function main() {
 
     const article = analyze_article(article_content, article_filename, config.default_author);
     article.html = marked(article.markdown);
-    const hidden = article.tags.includes('Hidden');
-    const comment = hidden ? "" : `<script src="https://giscus.app/client.js"
+    article.article_dir = article_dir;
+    article.hidden = article.tags.includes('Hidden');
+
+    const html_filename = article.filename + (article.hidden ? '.htm' : '.html');
+    article.url_path = join('/', base_path, article_dir, html_filename);
+
+    all_articles.push(article);
+  }));
+
+  // Build the articles_info array for visible articles
+  const articles_info = all_articles.filter(a => !a.hidden);
+
+  // Sort articles_info by date
+  articles_info.sort((a, b) => {
+    if (a.date < b.date) return 1;
+    if (a.date > b.date) return -1;
+    return a.title <= b.title;
+  });
+
+  // Extract all unique tags (categories)
+  const all_tags = Array.from(new Set(articles_info.flatMap(article => article.tags)));
+
+  // Pass 2: Render and write HTML files
+  await Promise.all(all_articles.map(async article => {
+    const comment = article.hidden ? "" : `<script src="https://giscus.app/client.js"
       data-repo="${config.github_repo}"
       data-repo-id="${config.github_repo_id}"
-      data-category="Announcements"
-      data-category-id="DIC_kwDOBNDkVs4CA6GQ"
+      data-category="${config.giscus_category || 'Announcements'}"
+      data-category-id="${config.giscus_category_id || 'DIC_kwDOBNDkVs4CA6GQ'}"
       data-mapping="title"
       data-reactions-enabled="0"
       data-emit-metadata="0"
@@ -166,44 +190,43 @@ async function main() {
       comment: comment,
       web_master: config.web_master,
       google_analytics_id: config.google_analytics_id,
-      base_path: base_path
+      base_path: base_path,
+      site_name: config.site_name,
+      categories: all_tags,
+      is_index: false
     };
     const render_result = mustache.render(article_template, view);
 
+    const html_filename = article.filename + (article.hidden ? '.htm' : '.html');
+    const html_path = join(config.output_path, article.article_dir, html_filename);
+    
+    // Cleanup internal properties we don't want in the JSON index
     delete article.html;
     delete article.markdown;
-    const html_filename = article.filename + (hidden ? '.htm' : '.html');
-    article.url_path = join('/', base_path, article_dir, html_filename);
+    delete article.article_dir;
+    delete article.hidden;
 
-    if (!hidden) {
-      articles_info.push(article);
-    }
-
-    const html_path = join(config.output_path, article_dir, html_filename);
     await write_when_change(html_path, render_result);
   }));
 
-  // sort articles by date
-  articles_info.sort((a, b) => {
-    if (a.date < b.date) return 1;
-    if (a.date > b.date) return -1;
-    return a.title <= b.title;
-  });
-
+  // Render the homepage index
   const index_template_name = './src/card.html';
   const index_template = (await fs.readFile(index_template_name)).toString();
   const index_result =
     mustache.render(index_template, { articles: articles_info, base_path: base_path });
 
-  const view = {
+  const index_view = {
     title_string: config.site_name,
     title: config.site_name,
     article: index_result,
     web_master: config.web_master,
     google_analytics_id: config.google_analytics_id,
-    base_path: base_path
+    base_path: base_path,
+    site_name: config.site_name,
+    categories: all_tags,
+    is_index: true
   };
-  const render_result = mustache.render(article_template, view);
+  const render_result = mustache.render(article_template, index_view);
   const html_path = join(config.output_path, 'index.html');
   await write_when_change(html_path, render_result);
 
