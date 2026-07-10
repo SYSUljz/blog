@@ -19,11 +19,35 @@
   </head>
   <body>
     <div class="app">
-      <div class="title">
-        <h1> Jack-Li's Blog </h1>
-      </div>
-      <div class="markdown">
-        <div class="card">
+      <header class="header">
+        <a href="/blog/" class="site-title">Jack-Li's Blog</a>
+      </header>
+
+      <div class="container">
+        <aside class="sidebar">
+          <div class="sidebar-title">分类目录</div>
+          <nav>
+            <ul>
+              <li>
+                <a href="/blog/" class="category-link" data-tag="">全部文章</a>
+              </li>
+              <li>
+                <a href="/blog/#/ex-opt" class="category-link" data-tag="ex-opt">ex-opt</a>
+              </li>
+              <li>
+                <a href="/blog/#/网络编程" class="category-link" data-tag="网络编程">网络编程</a>
+              </li>
+              <li>
+                <a href="/blog/#/about-me" class="category-link" data-tag="about-me">about-me</a>
+              </li>
+            </ul>
+          </nav>
+        </aside>
+
+        <main class="content">
+
+          <div class="markdown">
+            <div class="card">
   <div class="abstract">
     <a href="/blog/ex-opt/ex-opt 之前的故事.html" class="article_title">
       <p>ex-opt 之前的故事</p>
@@ -104,16 +128,19 @@
   </div>
 </div>
 
+          </div>
+          
+        </main>
       </div>
-      
-      <div class="footer">
+
+      <footer class="footer">
         <div class="license">
           Except where otherwise noted, content on this site is licensed under a <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> license.
         </div>
         <div class="copyright">
           Copyright©2017 SYSUljz, All Rights Reserved. Powered by <a href="https://pages.github.com/">GitHub Pages</a> and <a href="https://github.com/features/actions">GitHub Actions</a>.
         </div>
-      </div>
+      </footer>
     </div>
     <script src="/blog/dist/main.js"></script>
   </body>

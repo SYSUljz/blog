@@ -19,17 +19,44 @@
   </head>
   <body>
     <div class="app">
-      <div class="title">
-        <h1> 浅谈概念水文模型中的参数优化 </h1>
-      </div>
-      <div class="info">
-        <div class="date"> 2026.07.05 </div>
-        <a href="https://github.com/jack-li">
-          <div class="author"> jack-li </div>
-        </a>
-      </div>
-      <div class="markdown">
-        <p>从早期的新安江模型，到后来的 SWAT 模型，再到如今备受瞩目的可微分水文模型，如何在物理机制的严谨性、科学性与模型整体的实用性之间取得平衡，一直是水文模型构建中需要深思的核心问题。<br>
+      <header class="header">
+        <a href="/blog/" class="site-title">Jack-Li's Blog</a>
+      </header>
+
+      <div class="container">
+        <aside class="sidebar">
+          <div class="sidebar-title">分类目录</div>
+          <nav>
+            <ul>
+              <li>
+                <a href="/blog/" class="category-link" data-tag="">全部文章</a>
+              </li>
+              <li>
+                <a href="/blog/#/ex-opt" class="category-link" data-tag="ex-opt">ex-opt</a>
+              </li>
+              <li>
+                <a href="/blog/#/网络编程" class="category-link" data-tag="网络编程">网络编程</a>
+              </li>
+              <li>
+                <a href="/blog/#/about-me" class="category-link" data-tag="about-me">about-me</a>
+              </li>
+            </ul>
+          </nav>
+        </aside>
+
+        <main class="content">
+          <div class="title">
+            <h1> 浅谈概念水文模型中的参数优化 </h1>
+          </div>
+          <div class="info">
+            <div class="date"> 2026.07.05 </div>
+            <a href="https://github.com/jack-li">
+              <div class="author"> jack-li </div>
+            </a>
+          </div>
+
+          <div class="markdown">
+            <p>从早期的新安江模型，到后来的 SWAT 模型，再到如今备受瞩目的可微分水文模型，如何在物理机制的严谨性、科学性与模型整体的实用性之间取得平衡，一直是水文模型构建中需要深思的核心问题。<br>
 过度追求模型物理计算过程的精细化（例如对蒸散发、下渗以及产流的空间异质性进行过度复杂的建模，或是对汇流过程引入复杂的水动力学计算），往往会导致输入数据极难收集，且模型计算耗时急剧上升。这不仅降低了模型的易用性，也阻碍了其在实际工程中的推广应用。</p>
 <p>以可微分水文模型（如 <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>δ</mi></mrow><annotation encoding="application/x-tex">\delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0379em;">δ</span></span></span></span></eq>-HBV）为代表的方法则走向了另一个极端：通过对物理机制进行进一步的简化与概化，换取更强的可并行性与空间迁移能力。例如，在 <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>δ</mi></mrow><annotation encoding="application/x-tex">\delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0379em;">δ</span></span></span></span></eq>-HBV 中，为了让整个模拟流程能无缝运行在 PyTorch 框架上以实现可微分计算，汇流部分仅采用了隐式单位线或马斯金根-康吉（Muskingum-Cunge）汇流方法，而产流部分则直接套用了集总式的 HBV 模型。这使得整个模型完全可以通过 PyTorch 的张量计算在 GPU 上进行梯度下降优化，从而实现大范围、乃至无资料地区（PUB）的高精度径流模拟。</p>
 <p>然而，这种设计的缺点也十分明显：洪水演进本质上是一个强串行的物理过程，短期降雨的时空分布差异会对最终的洪峰形态产生决定性影响。而 PyTorch 和 CUDA 提供的算子天然是为大规模数据并行设计的，极难在保证计算效率的前提下，将更复杂、更贴合实际物理机制的串行洪水演进模型转化为可微分形式。因此，受限于数据获取与计算效率的双重制约，水文建模领域并不像 AI 大模型领域那样有绝对统一的 Benchmark 性能测评，各种模型在不同的应用场景下各有优劣。</p>
@@ -42,8 +69,8 @@
 <p><a href="https://www.bilibili.com/video/BV1CF411W7K3/?share_source=copy_web&amp;vd_source=8ff0eaeb4ef050b21444340c4354528e">学术报告 | Water：流溪河模型与流域暴雨洪水过程模拟及预报 — 中山大学陈洋波教授</a>
 <img src="../images/%E6%B5%81%E6%BA%AA%E6%B2%B3%E6%A8%A1%E5%9E%8B%E5%BA%94%E7%94%A8%E6%A1%88%E4%BE%8B.jpg" alt="流溪河模型应用案例"></p>
 
-      </div>
-      <script src="https://giscus.app/client.js"
+          </div>
+          <script src="https://giscus.app/client.js"
       data-repo="SYSUljz/blog"
       data-repo-id="MDEwOlJlcG9zaXRvcnk4MDc5ODgwNg=="
       data-category="Announcements"
@@ -57,14 +84,17 @@
       crossorigin="anonymous"
       async>
     </script>
-      <div class="footer">
+        </main>
+      </div>
+
+      <footer class="footer">
         <div class="license">
           Except where otherwise noted, content on this site is licensed under a <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> license.
         </div>
         <div class="copyright">
           Copyright©2017 SYSUljz, All Rights Reserved. Powered by <a href="https://pages.github.com/">GitHub Pages</a> and <a href="https://github.com/features/actions">GitHub Actions</a>.
         </div>
-      </div>
+      </footer>
     </div>
     <script src="/blog/dist/main.js"></script>
   </body>

@@ -19,17 +19,44 @@
   </head>
   <body>
     <div class="app">
-      <div class="title">
-        <h1> Rust及 C++ 异步库的计时器实现 </h1>
-      </div>
-      <div class="info">
-        <div class="date"> 2026.07.06 </div>
-        <a href="https://github.com/jack-li">
-          <div class="author"> jack-li </div>
-        </a>
-      </div>
-      <div class="markdown">
-        <p>最近一直在学习网络编程，尝试使用 C++ 编写一个支持 C++20 <code>co_await</code> 的网络库。在实现 Socket 连接超时自动断开的特性时，发现定时器（Timer）的底层设计与实现别有洞天。</p>
+      <header class="header">
+        <a href="/blog/" class="site-title">Jack-Li's Blog</a>
+      </header>
+
+      <div class="container">
+        <aside class="sidebar">
+          <div class="sidebar-title">分类目录</div>
+          <nav>
+            <ul>
+              <li>
+                <a href="/blog/" class="category-link" data-tag="">全部文章</a>
+              </li>
+              <li>
+                <a href="/blog/#/ex-opt" class="category-link" data-tag="ex-opt">ex-opt</a>
+              </li>
+              <li>
+                <a href="/blog/#/网络编程" class="category-link" data-tag="网络编程">网络编程</a>
+              </li>
+              <li>
+                <a href="/blog/#/about-me" class="category-link" data-tag="about-me">about-me</a>
+              </li>
+            </ul>
+          </nav>
+        </aside>
+
+        <main class="content">
+          <div class="title">
+            <h1> Rust及 C++ 异步库的计时器实现 </h1>
+          </div>
+          <div class="info">
+            <div class="date"> 2026.07.06 </div>
+            <a href="https://github.com/jack-li">
+              <div class="author"> jack-li </div>
+            </a>
+          </div>
+
+          <div class="markdown">
+            <p>最近一直在学习网络编程，尝试使用 C++ 编写一个支持 C++20 <code>co_await</code> 的网络库。在实现 Socket 连接超时自动断开的特性时，发现定时器（Timer）的底层设计与实现别有洞天。</p>
 <p>在 Rust 著名的异步运行时 <code>Tokio</code> 中，定时器采用的是**时间轮（Timer Wheel）**的设计。在底层，这是一个高度依赖指针链表的数据结构：它的每一个插槽（Slot）后都挂着一串通过双向链表相连的节点（Node）。</p>
 <p>在此之上，<code>Tokio</code> 采用了**分层时间轮（Hierarchical Timing Wheels）**的设计，共包含 6 个轮级（Wheel），每个轮级被等分为 64 个插槽。每个插槽的物理本质是一个双向链表的表头，链表中悬挂着所有落在该时间区间内的定时器任务。这 6 个轮级的转动速度与代表的时间跨度呈几何级数放大（从 1ms <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\to</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span></eq> 64ms <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\to</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span></eq> <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>64</mn><mo>×</mo><mn>64</mn></mrow><annotation encoding="application/x-tex">64 \times 64</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">64</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">64</span></span></span></span></eq>ms <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\to</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span></eq> ...）。这种设计的巧妙之处在于，插入一个定时器的时间复杂度是 <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">O</span><span class="mopen">(</span><span class="mord">1</span><span class="mclose">)</span></span></span></span></eq>。</p>
 <p>相比之下，C++ 著名的网络库 <code>Boost.Asio</code> 中的定时器则是基于 <code>std::vector</code> 实现的<strong>最小二叉堆（Min-Heap）</strong>，插入一个定时器的时间复杂度为 <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mi>log</mi><mo>⁡</mo><mi>N</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(\log N)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">O</span><span class="mopen">(</span><span class="mop">lo<span style="margin-right:0.0139em;">g</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mclose">)</span></span></span></span></eq>。出于好奇，我调研了现代 C++ 异步框架，发现 <code>stdexec</code> 中提供的定时器实现 <code>exec::time_context</code> 同样是基于最小二叉堆实现的。</p>
@@ -38,8 +65,8 @@
 <p>然而，在真实的高并发网络场景中，情况大不相同。我们往往需要频繁地<strong>取消定时器</strong>（例如：在超时时间到达前，网络数据已经提前送达，此时需要取消超时闹钟）。对于二叉堆而言，取消一个特定定时器需要 <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mi>N</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(N)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">O</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mclose">)</span></span></span></span></eq> 的复杂度进行搜寻并重构堆结构；而对于时间轮，由于底层的双向链表设计，只需 <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">O</span><span class="mopen">(</span><span class="mord">1</span><span class="mclose">)</span></span></span></span></eq> 的复杂度直接将节点断开即可。在频繁插入与取消并存的实测数据中，时间轮的效率比二叉堆快了将近 900 倍。</p>
 <p>因此，在面对海量并发连接与高频计时任务的网络服务场景中，<strong>分层时间轮</strong>依然是无可争议的最佳实践选择。</p>
 
-      </div>
-      <script src="https://giscus.app/client.js"
+          </div>
+          <script src="https://giscus.app/client.js"
       data-repo="SYSUljz/blog"
       data-repo-id="MDEwOlJlcG9zaXRvcnk4MDc5ODgwNg=="
       data-category="Announcements"
@@ -53,14 +80,17 @@
       crossorigin="anonymous"
       async>
     </script>
-      <div class="footer">
+        </main>
+      </div>
+
+      <footer class="footer">
         <div class="license">
           Except where otherwise noted, content on this site is licensed under a <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> license.
         </div>
         <div class="copyright">
           Copyright©2017 SYSUljz, All Rights Reserved. Powered by <a href="https://pages.github.com/">GitHub Pages</a> and <a href="https://github.com/features/actions">GitHub Actions</a>.
         </div>
-      </div>
+      </footer>
     </div>
     <script src="/blog/dist/main.js"></script>
   </body>

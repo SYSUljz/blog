@@ -19,17 +19,44 @@
   </head>
   <body>
     <div class="app">
-      <div class="title">
-        <h1> ex-opt 之前的故事 </h1>
-      </div>
-      <div class="info">
-        <div class="date"> 2026.07.10 </div>
-        <a href="https://github.com/jack-li">
-          <div class="author"> jack-li </div>
-        </a>
-      </div>
-      <div class="markdown">
-        <p>正如上文所述，对于流溪河模型，我们需要使用 PSO（粒子群优化）等算法进行参数优选。优化速度越快，意味着我们能在相同时间内搜索越广阔的参数空间，计算网格相应的也可以设定的更精细。因此，对参数优选引擎进行持续的性能优化至关重要。</p>
+      <header class="header">
+        <a href="/blog/" class="site-title">Jack-Li's Blog</a>
+      </header>
+
+      <div class="container">
+        <aside class="sidebar">
+          <div class="sidebar-title">分类目录</div>
+          <nav>
+            <ul>
+              <li>
+                <a href="/blog/" class="category-link" data-tag="">全部文章</a>
+              </li>
+              <li>
+                <a href="/blog/#/ex-opt" class="category-link" data-tag="ex-opt">ex-opt</a>
+              </li>
+              <li>
+                <a href="/blog/#/网络编程" class="category-link" data-tag="网络编程">网络编程</a>
+              </li>
+              <li>
+                <a href="/blog/#/about-me" class="category-link" data-tag="about-me">about-me</a>
+              </li>
+            </ul>
+          </nav>
+        </aside>
+
+        <main class="content">
+          <div class="title">
+            <h1> ex-opt 之前的故事 </h1>
+          </div>
+          <div class="info">
+            <div class="date"> 2026.07.10 </div>
+            <a href="https://github.com/jack-li">
+              <div class="author"> jack-li </div>
+            </a>
+          </div>
+
+          <div class="markdown">
+            <p>正如上文所述，对于流溪河模型，我们需要使用 PSO（粒子群优化）等算法进行参数优选。优化速度越快，意味着我们能在相同时间内搜索越广阔的参数空间，计算网格相应的也可以设定的更精细。因此，对参数优选引擎进行持续的性能优化至关重要。</p>
 <p>课题组以往的程序均使用 Java 编写，且都在单机上运行，未考虑集群并行。听闻很早之前为了在超算中心上运行流溪河模型，专门邀请过计算机系的团队重写过一版能分布式运行的模型（推测是基于 MPI 实现的分布式），但由于难以维护，很快就被放弃使用。因此，分布式系统的参数优选问题迟迟没有得到解决。</p>
 <p>为进一步提高整体的计算效率，笔者于 2026 年初将整个计算流程使用 C++ 重写。主要原因在于：<s>C++ 更适合重计算的编程场景</s>，其实是本人更喜欢 C++ 语言。之后的时间里，笔者一直在思考如何优雅地实现分布式的参数优选。个人认为，这个优选系统应当具备以下特点：</p>
 <ul>
@@ -62,8 +89,8 @@
 <p>利用 ex-opt 轻量化的集群部署方案在团队自建集群服务器上部署更高性能稳定的模型，支撑团队未来建模及应用。<br>
 不断完善 ex-opt 包括（Python Bindings、提供更多流式优化算法的实现、集群容错等），为分布式的参数优选任务场景提供更易用、稳定的开源方案 ：）</p>
 
-      </div>
-      <script src="https://giscus.app/client.js"
+          </div>
+          <script src="https://giscus.app/client.js"
       data-repo="SYSUljz/blog"
       data-repo-id="MDEwOlJlcG9zaXRvcnk4MDc5ODgwNg=="
       data-category="Announcements"
@@ -77,14 +104,17 @@
       crossorigin="anonymous"
       async>
     </script>
-      <div class="footer">
+        </main>
+      </div>
+
+      <footer class="footer">
         <div class="license">
           Except where otherwise noted, content on this site is licensed under a <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> license.
         </div>
         <div class="copyright">
           Copyright©2017 SYSUljz, All Rights Reserved. Powered by <a href="https://pages.github.com/">GitHub Pages</a> and <a href="https://github.com/features/actions">GitHub Actions</a>.
         </div>
-      </div>
+      </footer>
     </div>
     <script src="/blog/dist/main.js"></script>
   </body>

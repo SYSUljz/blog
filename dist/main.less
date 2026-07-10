@@ -15,7 +15,7 @@ body {
 
 .app {
   font-family: "PT Sans", Helvetica, Arial, STFangSong, Vernada, Tahoma, STXihei, "Microsoft YaHei", "Songti SC", SimSun, Heiti, sans-serif;
-  max-width: 40rem;
+  max-width: 60rem;
   min-height: 100vh;
   line-height: 1.6;
   margin: 0 auto;
@@ -120,6 +120,146 @@ body {
         background-color: #333;
       }
     }
+  }
+
+  .header {
+    padding: 1.5rem 0;
+    border-bottom: 1px solid #d1dbe5;
+    margin-bottom: 2rem;
+    @media (prefers-color-scheme: dark) {
+      border-color: #333;
+    }
+    .site-title {
+      font-size: 1.8rem;
+      font-weight: bold;
+      color: black;
+      @media (prefers-color-scheme: dark) {
+        color: lightgray;
+      }
+      &:hover {
+        color: #0066cc;
+        @media (prefers-color-scheme: dark) {
+          color: #66b2ff;
+        }
+      }
+    }
+  }
+
+  .container {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    @media screen and (min-width: 800px) {
+      flex-direction: row;
+      gap: 3rem;
+    }
+  }
+
+  .sidebar {
+    width: 100%;
+    margin-bottom: 2rem;
+    @media screen and (min-width: 800px) {
+      width: 12rem;
+      flex-shrink: 0;
+      position: sticky;
+      top: 2rem;
+      align-self: flex-start;
+      margin-bottom: 0;
+    }
+    
+    .sidebar-title {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #888;
+      margin-bottom: 0.75rem;
+      font-weight: bold;
+      border-bottom: 1px solid #e4e8f1;
+      padding-bottom: 0.25rem;
+      @media (prefers-color-scheme: dark) {
+        color: #777;
+        border-color: #222;
+      }
+    }
+    
+    ul {
+      list-style: none;
+      padding-left: 0;
+      margin: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      @media screen and (min-width: 800px) {
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+      
+      li {
+        margin: 0;
+        
+        .category-link {
+          display: inline-block;
+          padding: 0.25rem 0.6rem;
+          border-radius: 4px;
+          font-size: 0.9rem;
+          border: 1px solid #d1dbe5;
+          background: #f9f9f9;
+          color: black;
+          @media (prefers-color-scheme: dark) {
+            border-color: #333;
+            background: #111;
+            color: lightgray;
+          }
+          @media screen and (min-width: 800px) {
+            display: block;
+            padding: 0.4rem 0.5rem;
+            border: none;
+            background: transparent;
+            @media (prefers-color-scheme: dark) {
+              background: transparent;
+            }
+          }
+          
+          &:hover {
+            background: #e4e8f1;
+            @media (prefers-color-scheme: dark) {
+              background: #222;
+            }
+            @media screen and (min-width: 800px) {
+              background: #f0f0f0;
+              @media (prefers-color-scheme: dark) {
+                background: #1a1a1a;
+              }
+            }
+          }
+          
+          &.active {
+            font-weight: bold;
+            color: #0066cc;
+            background: #DAE7FE;
+            border-color: #b0c4de;
+            @media (prefers-color-scheme: dark) {
+              color: #66b2ff;
+              background: #222;
+              border-color: #444;
+            }
+            @media screen and (min-width: 800px) {
+              background: #DAE7FE;
+              @media (prefers-color-scheme: dark) {
+                background: #222;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  .content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
   }
 }
 

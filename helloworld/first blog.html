@@ -19,17 +19,44 @@
   </head>
   <body>
     <div class="app">
-      <div class="title">
-        <h1> Hi🙋‍♂️这里是jack li 的博客 </h1>
-      </div>
-      <div class="info">
-        <div class="date"> 2026.06.29 </div>
-        <a href="https://github.com/jack-li">
-          <div class="author"> jack-li </div>
-        </a>
-      </div>
-      <div class="markdown">
-        <h2 id="关于我" tabindex="-1"><a href="#%E5%85%B3%E4%BA%8E%E6%88%91">关于我</a></h2>
+      <header class="header">
+        <a href="/blog/" class="site-title">Jack-Li's Blog</a>
+      </header>
+
+      <div class="container">
+        <aside class="sidebar">
+          <div class="sidebar-title">分类目录</div>
+          <nav>
+            <ul>
+              <li>
+                <a href="/blog/" class="category-link" data-tag="">全部文章</a>
+              </li>
+              <li>
+                <a href="/blog/#/ex-opt" class="category-link" data-tag="ex-opt">ex-opt</a>
+              </li>
+              <li>
+                <a href="/blog/#/网络编程" class="category-link" data-tag="网络编程">网络编程</a>
+              </li>
+              <li>
+                <a href="/blog/#/about-me" class="category-link" data-tag="about-me">about-me</a>
+              </li>
+            </ul>
+          </nav>
+        </aside>
+
+        <main class="content">
+          <div class="title">
+            <h1> Hi🙋‍♂️这里是jack li 的博客 </h1>
+          </div>
+          <div class="info">
+            <div class="date"> 2026.06.29 </div>
+            <a href="https://github.com/jack-li">
+              <div class="author"> jack-li </div>
+            </a>
+          </div>
+
+          <div class="markdown">
+            <h2 id="关于我" tabindex="-1"><a href="#%E5%85%B3%E4%BA%8E%E6%88%91">关于我</a></h2>
 <ul>
 <li>2021-2025 中山大学 地理信息科学 本科</li>
 <li>2026-2028 中山大学 地理信息科学 硕士 （分布式水文模型、洪水预报方向）</li>
@@ -38,8 +65,8 @@
 <h3 id="流溪河模型cpp:https://github.com/sysuljz/lms-model" tabindex="-1"><a href="#%E6%B5%81%E6%BA%AA%E6%B2%B3%E6%A8%A1%E5%9E%8Bcpp%3Ahttps%3A%2F%2Fgithub.com%2Fsysuljz%2Flms-model">流溪河模型cpp:<a href="https://github.com/SYSUljz/lms-model">https://github.com/SYSUljz/lms-model</a></a></h3>
 <h3 id="ex-opt:https://github.com/sysuljz/ex-opt" tabindex="-1"><a href="#ex-opt%3Ahttps%3A%2F%2Fgithub.com%2Fsysuljz%2Fex-opt">ex-opt:<a href="https://github.com/SYSUljz/ex-opt">https://github.com/SYSUljz/ex-opt</a></a></h3>
 
-      </div>
-      <script src="https://giscus.app/client.js"
+          </div>
+          <script src="https://giscus.app/client.js"
       data-repo="SYSUljz/blog"
       data-repo-id="MDEwOlJlcG9zaXRvcnk4MDc5ODgwNg=="
       data-category="Announcements"
@@ -53,14 +80,17 @@
       crossorigin="anonymous"
       async>
     </script>
-      <div class="footer">
+        </main>
+      </div>
+
+      <footer class="footer">
         <div class="license">
           Except where otherwise noted, content on this site is licensed under a <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> license.
         </div>
         <div class="copyright">
           Copyright©2017 SYSUljz, All Rights Reserved. Powered by <a href="https://pages.github.com/">GitHub Pages</a> and <a href="https://github.com/features/actions">GitHub Actions</a>.
         </div>
-      </div>
+      </footer>
     </div>
     <script src="/blog/dist/main.js"></script>
   </body>

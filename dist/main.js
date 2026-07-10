@@ -1,13 +1,37 @@
-const pathname = window.location.pathname;
+window.onhashchange = function () {
+  let mark = window.location.hash.substr(2);
+  try {
+    mark = decodeURIComponent(mark);
+  } catch (e) {
+    // Ignore decoding error and fallback
+  }
+  const pathname = window.location.pathname;
+  const isHomePage = pathname === "/" || pathname === "/index.html" || pathname.endsWith("/index.html") || pathname.endsWith("/");
 
-if (pathname === "/" || pathname === "/index.html") {
-  window.onhashchange = function () {
-    const mark = window.location.hash.substr(2);
+  // 1. Highlight sidebar categories
+  const categoryLinks = document.getElementsByClassName("category-link");
+  for (const link of categoryLinks) {
+    const tag = link.getAttribute("data-tag");
+    if (tag === mark) {
+      link.classList.add("active");
+      if (isHomePage) {
+        link.href = "#"; // Clicking again clears the filter
+      }
+    } else {
+      link.classList.remove("active");
+      if (isHomePage) {
+        link.href = tag ? "#/" + tag : "#";
+      }
+    }
+  }
+
+  // 2. Filter cards on homepage
+  if (isHomePage) {
     const cards = document.getElementsByClassName("card");
-    for (card of cards) {
-      var found = false;
+    for (const card of cards) {
+      let found = false;
       const tags = card.getElementsByClassName("tag");
-      for (tag of tags) {
+      for (const tag of tags) {
         const a = tag.children[0];
         if (a.innerText === mark) {
           tag.classList.add("selected");
@@ -21,6 +45,6 @@ if (pathname === "/" || pathname === "/index.html") {
       card.hidden = mark.length > 0 && !found;
     }
   }
+};
 
-  window.onhashchange();
-}
+window.onhashchange();
