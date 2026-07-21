@@ -1,5 +1,15 @@
 [
   {
+    "title": "不要把 NFS 作为高 I/O 服务的 Data Root：一次踩坑与原理解析",
+    "date": "2026.07.20",
+    "author": "jack-li",
+    "tags": [
+      "运维小记"
+    ],
+    "filename": "不要把NFS作为data-root",
+    "url_path": "/blog/运维日记/不要把NFS作为data-root.html"
+  },
+  {
     "title": "ex-opt 之前的故事",
     "date": "2026.07.10",
     "author": "jack-li",

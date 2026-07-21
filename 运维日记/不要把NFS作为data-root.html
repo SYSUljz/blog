@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" href="/blog/dist/favicon.ico">
+    <link rel="apple-touch-icon" href="/blog/dist/favicon.png">
+    <link rel="stylesheet" type="text/css" href="/blog/dist/highlight.css">
+    <link rel="stylesheet" type="text/css" href="/blog/dist/katex.min.css">
+    <link rel="stylesheet" type="text/css" href="/blog/dist/main.css">
+    <title>不要把 NFS 作为高 I/O 服务的 Data Root：一次踩坑与原理解析 | Jack-Li's Blog</title>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-GQ26H3JQ3G"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-GQ26H3JQ3G');
+    </script>
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <a href="/blog/" class="site-title">Jack-Li's Blog</a>
+      </header>
+
+      <div class="container">
+        <aside class="sidebar">
+          <div class="sidebar-title">分类目录</div>
+          <nav>
+            <ul>
+              <li>
+                <a href="/blog/" class="category-link" data-tag="">全部文章</a>
+              </li>
+              <li>
+                <a href="/blog/#/运维小记" class="category-link" data-tag="运维小记">运维小记</a>
+              </li>
+              <li>
+                <a href="/blog/#/ex-opt" class="category-link" data-tag="ex-opt">ex-opt</a>
+              </li>
+              <li>
+                <a href="/blog/#/网络编程" class="category-link" data-tag="网络编程">网络编程</a>
+              </li>
+              <li>
+                <a href="/blog/#/about-me" class="category-link" data-tag="about-me">about-me</a>
+              </li>
+            </ul>
+          </nav>
+        </aside>
+
+        <main class="content">
+          <div class="title">
+            <h1> 不要把 NFS 作为高 I/O 服务的 Data Root：一次踩坑与原理解析 </h1>
+          </div>
+          <div class="info">
+            <div class="date"> 2026.07.20 </div>
+            <a href="https://github.com/jack-li">
+              <div class="author"> jack-li </div>
+            </a>
+          </div>
+
+          <div class="markdown">
+            <p>在日常开发和运维中，高速共享网络存储（如 NFS）因其超大容量和便捷的跨节点共享特性，常常成为开发者眼中的“香饽饽”。然而，如果盲目将高并发、密集写操作的服务（如 Docker Registry、GitLab 数据库）的数据目录部署在 NFS 上，可能会引发意想不到的灾难。</p>
+<p>本文记录了一次因为将 GitLab 的数据目录挂载在 NFS 机械硬盘上，导致服务器彻底卡死、SSH 拒绝连接的排错经历，并深入分析了背后的 Linux 内核与 NFS 机制。</p>
+<hr>
+<h2 id="1.-事情起因：20tb-nfs-的诱惑" tabindex="-1"><a href="#1.-%E4%BA%8B%E6%83%85%E8%B5%B7%E5%9B%A0%EF%BC%9A20tb-nfs-%E7%9A%84%E8%AF%B1%E6%83%91">1. 事情起因：20TB NFS 的诱惑</a></h2>
+<p>最近，课题组的服务器接入了一台 20TB 的机械硬盘存储服务器，通过光纤高速互联挂载在各节点主机的 <code>/public</code> 目录下。其实测速度非常惊人，移动一个 133GB 的文件夹只需不到 10 分钟。</p>
+<p>这让我萌生了一个想法：如果把所有程序和数据都放在 <code>/public</code> 中，不就可以完美实现节点间的程序与数据共享了吗？</p>
+<p>说干就干，我迅速完成了以下部署：</p>
+<ol>
+<li><strong>Docker Registry</strong>：配置好 Dockerfile，打包镜像并上传至 Registry，各个节点拉取并运行，一切顺利。</li>
+<li><strong>GitLab 部署</strong>：为了配合 CI/CD 自动运行任务，我决定把 GitLab 也部署起来。在 AI 的指导下，我使用 Docker Compose 快速搭建了 GitLab 服务，并直接将其数据目录映射到了 NFS 的 <code>/public/var/srv/</code> 目录下。</li>
+</ol>
+<p>20TB 空间随心用，当时觉得这套方案简直完美。</p>
+<hr>
+<h2 id="2.-异样与暴雷：从卡顿到服务器失联" tabindex="-1"><a href="#2.-%E5%BC%82%E6%A0%B7%E4%B8%8E%E6%9A%B4%E9%9B%B7%EF%BC%9A%E4%BB%8E%E5%8D%A1%E9%A1%BF%E5%88%B0%E6%9C%8D%E5%8A%A1%E5%99%A8%E5%A4%B1%E8%81%94">2. 异样与暴雷：从卡顿到服务器失联</a></h2>
+<p>然而好景不长，很快我就发现 GitLab 网页操作极其卡顿。照理说，开发机距离服务器仅 30 米，在千兆校园网内不应该有如此明显的延迟。</p>
+<p>午饭时我琢磨了一下：虽然光纤交换机速度很快，但远端存储本质上还是机械硬盘，并发随机 I/O 性能较差，这很可能是瓶颈所在。为了解决卡顿，我决定将 GitLab 迁移回本地主机的 SSD 固态硬盘上。</p>
+<p>回到工位，我执行了以下操作：</p>
+<ol>
+<li>执行 <code>docker compose down</code> 停止服务。</li>
+<li>修改 <code>docker-compose.yml</code>，将数据目录改回本地固态硬盘路径。</li>
+<li>重新执行 <code>docker compose up -d</code> 启动。</li>
+</ol>
+<p>就在这时，诡异的事情发生了：<strong>我的 SSH 终端突然毫无响应，紧接着服务器连 <code>ping</code> 都 ping 不通了</strong>。</p>
+<hr>
+<h2 id="3.-原理解析：为什么-nfs-会让整机崩溃？" tabindex="-1"><a href="#3.-%E5%8E%9F%E7%90%86%E8%A7%A3%E6%9E%90%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88-nfs-%E4%BC%9A%E8%AE%A9%E6%95%B4%E6%9C%BA%E5%B4%A9%E6%BA%83%EF%BC%9F">3. 原理解析：为什么 NFS 会让整机崩溃？</a></h2>
+<p>服务器失联后，我通过排查与分析，厘清了这是由于 <strong>NFS 写入阻塞</strong> 与 <strong>Linux 内存回收机制</strong> 共同作用导致的全局冻结。</p>
+<h3 id="核心诱因-1：不可中断的内核休眠（d-状态-/-uninterruptible-sleep）" tabindex="-1"><a href="#%E6%A0%B8%E5%BF%83%E8%AF%B1%E5%9B%A0-1%EF%BC%9A%E4%B8%8D%E5%8F%AF%E4%B8%AD%E6%96%AD%E7%9A%84%E5%86%85%E6%A0%B8%E4%BC%91%E7%9C%A0%EF%BC%88d-%E7%8A%B6%E6%80%81-%2F-uninterruptible-sleep%EF%BC%89">核心诱因 1：不可中断的内核休眠（D 状态 / Uninterruptible Sleep）</a></h3>
+<p>当 GitLab 内部的 PostgreSQL 数据库等服务试图在 NFS 挂载点上写数据时，会发起系统调用（如 <code>write</code> 或 <code>fsync</code>）。为了保证数据一致性，Linux 内核会将发起调用的进程置于 <strong>D 状态（TASK_UNINTERRUPTIBLE）</strong>：</p>
+<ul>
+<li><strong>什么是 D 状态</strong>：内核向存储设备发起请求后，强制让该进程休眠，直到设备返回“写入成功”的响应。</li>
+<li><strong>不响应信号</strong>：处于 D 状态的进程无法被任何信号中断，即使执行 <code>kill -9</code> 也无济于事。</li>
+<li><strong>致命的延迟</strong>：本地固态硬盘的写入响应通常在微秒级别，而 NFS 在面临高并发随机读写或网络波动时，响应时间可能飙升至数秒甚至数分钟。这导致大量进程在内核中无限期死等。</li>
+</ul>
+<h3 id="核心诱因-2：内存页缓存（page-cache）锁死引发全局卡死" tabindex="-1"><a href="#%E6%A0%B8%E5%BF%83%E8%AF%B1%E5%9B%A0-2%EF%BC%9A%E5%86%85%E5%AD%98%E9%A1%B5%E7%BC%93%E5%AD%98%EF%BC%88page-cache%EF%BC%89%E9%94%81%E6%AD%BB%E5%BC%95%E5%8F%91%E5%85%A8%E5%B1%80%E5%8D%A1%E6%AD%BB">核心诱因 2：内存页缓存（Page Cache）锁死引发全局卡死</a></h3>
+<p>GitLab 启动时会产生庞大的临时缓存和日志写入，触发了如下连锁反应：</p>
+<ol>
+<li><strong>写缓存积压</strong>：内核为了提高效率，会先将数据写入本地内存的 Page Cache（页缓存）中，再由后台线程异步刷盘（Flush）到 NFS 挂载点。</li>
+<li><strong>脏页（Dirty Pages）超限</strong>：由于 NFS 写入极慢，Page Cache 迅速被未刷盘的脏数据填满，达到了系统内核的 <code>vm.dirty_ratio</code> 限制阈值。</li>
+<li><strong>全局内存申请阻塞（Memory Pressure）</strong>：一旦脏页占比超限，Linux 内核为了防止内存耗尽，会激活强制回收机制：<strong>要求系统内所有申请新内存的进程（包括 SSH 服务的 <code>sshd</code> 进程、网络协议栈等），必须先协助将内存中的脏页刷写到磁盘中。</strong></li>
+</ol>
+<p><strong>最终结果</strong>：由于 NFS 写入阻塞，脏页根本刷不动。这导致整个系统的内存分配器彻底冻结，连 <code>sshd</code> 想要创建新线程处理 SSH 连接请求都无法申请到内存。服务器因此彻底失联。</p>
+<hr>
+<h2 id="4.-惊险解决与二次卡死" tabindex="-1"><a href="#4.-%E6%83%8A%E9%99%A9%E8%A7%A3%E5%86%B3%E4%B8%8E%E4%BA%8C%E6%AC%A1%E5%8D%A1%E6%AD%BB">4. 惊险解决与二次卡死</a></h2>
+<p>眼看 SSH 挂掉，我急忙联系楼管阿姨打开机房大门，对服务器进行了硬重启。</p>
+<p>回到工位，SSH 重新连通，我松了一口气。在 AI 的建议下，我准备立刻清理掉挂载在 NFS 上的容器，以防它随 Docker 守护进程启动而再次卡死：</p>
+<pre class="language-bash"><code class="language-bash"><span class="token function">docker</span> <span class="token function">rm</span> <span class="token parameter variable">-f</span> gitlab_server gitlab_runner
+</code></pre>
+<p>然而，因为刚才重启了服务器，Docker 服务默认并没有启动。我习惯性地输入：</p>
+<pre class="language-bash"><code class="language-bash">systemctl start <span class="token function">docker</span>
+</code></pre>
+<p>回车按下的那一瞬间，命令行窗口再次失去响应——<strong>又卡死了</strong>。</p>
+<p><strong>原因分析</strong>：Docker 守护进程启动时，会去扫描并初始化本地容器的状态。由于之前的 GitLab 容器配置依然关联着 NFS 挂载路径，Docker 在初始化时尝试去访问该路径，结果再次触发了 NFS I/O 阻塞，导致 Docker 守护进程进入 D 状态，并顺带锁死了内存分配，重演了先前的悲剧。</p>
+<p>由于时间已晚，我只能等待第二天再次麻烦楼管阿姨重启服务器。</p>
+<hr>
+<h2 id="5.-总结与最佳实践" tabindex="-1"><a href="#5.-%E6%80%BB%E7%BB%93%E4%B8%8E%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5">5. 总结与最佳实践</a></h2>
+<p>经历这次波折，我深入研究了 NFS 的挂载配置及应用场景：</p>
+<h3 id="nfs-的挂载模式：hard-vs-soft" tabindex="-1"><a href="#nfs-%E7%9A%84%E6%8C%82%E8%BD%BD%E6%A8%A1%E5%BC%8F%EF%BC%9Ahard-vs-soft">NFS 的挂载模式：Hard vs Soft</a></h3>
+<p>NFS 挂载通常有两种模式：</p>
+<ul>
+<li><strong><code>hard</code> 模式（默认）</strong>：如果写操作未完成，客户端会无限期阻塞并重试，直至成功。在互联网后端中，为了防止数据损坏或丢失，通常默认采用 <code>hard</code> 模式。但缺点是，一旦远端存储响应慢，本地进程极易卡死在 D 状态。</li>
+<li><strong><code>soft</code> 模式</strong>：在网络超时或写入失败后，直接向应用返回 I/O 错误。虽然不会卡死进程，但可能导致应用因数据不一致而直接崩溃。</li>
+</ul>
+<h3 id="读写特性的差异" tabindex="-1"><a href="#%E8%AF%BB%E5%86%99%E7%89%B9%E6%80%A7%E7%9A%84%E5%B7%AE%E5%BC%82">读写特性的差异</a></h3>
+<ul>
+<li><strong>读操作</strong>：NFS 的读操作在网络拥堵时，虽然也会有延迟，但由于通常不涉及强制的内核级脏页刷盘逻辑，对系统全局内存分配器的冲击相对较小。</li>
+<li><strong>写操作</strong>：特别是高频、随机、带有 <code>fsync</code>（强制刷盘）性质的写操作（如数据库、缓存、日志目录），是 NFS 的绝对禁区。</li>
+</ul>
+<h3 id="最终解决方案" tabindex="-1"><a href="#%E6%9C%80%E7%BB%88%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88">最终解决方案</a></h3>
+<p>第二天重启服务器后，我果断放弃了将 GitLab 部署在挂载 NFS 的节点上。</p>
+<ol>
+<li><strong>服务迁移</strong>：将 GitLab 完整迁移部署到没有挂载 NFS、且配备本地 SSD 固态硬盘的 Web 服务器上。</li>
+<li><strong>反向代理</strong>：在集群的入口网关（Manager 节点）上配置 Nginx 反向代理，将 GitLab 的 Web 流量代理至该 Web 服务器。</li>
+</ol>
+<p><strong>一句话总结</strong>：<strong>千万不要把 NFS 作为服务的 Data Root，尤其是涉及到数据库或有密集写操作的路径。网络共享存储更适合存放只读的静态资源、冷备份数据，或者大文件的顺序读写。</strong></p>
+
+          </div>
+          <script src="https://giscus.app/client.js"
+      data-repo="SYSUljz/blog"
+      data-repo-id="MDEwOlJlcG9zaXRvcnk4MDc5ODgwNg=="
+      data-category="Announcements"
+      data-category-id="DIC_kwDOBNDkVs4CA6GQ"
+      data-mapping="title"
+      data-reactions-enabled="0"
+      data-emit-metadata="0"
+      data-input-position="bottom"
+      data-theme="preferred_color_scheme"
+      data-lang="en"
+      crossorigin="anonymous"
+      async>
+    </script>
+        </main>
+      </div>
+
+      <footer class="footer">
+        <div class="license">
+          Except where otherwise noted, content on this site is licensed under a <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> license.
+        </div>
+        <div class="copyright">
+          Copyright©2017 SYSUljz, All Rights Reserved. Powered by <a href="https://pages.github.com/">GitHub Pages</a> and <a href="https://github.com/features/actions">GitHub Actions</a>.
+        </div>
+      </footer>
+    </div>
+    <script src="/blog/dist/main.js"></script>
+  </body>
+</html>
