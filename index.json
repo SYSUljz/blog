@@ -1,5 +1,15 @@
 [
   {
+    "title": "优秀 C++ 代码赏析：bRPC 中的多线程一致性保障机制",
+    "date": "2026.09.05",
+    "author": "jack-li",
+    "tags": [
+      "网络编程"
+    ],
+    "filename": "bRPC中的状态一致性机制",
+    "url_path": "/blog/网络编程/bRPC中的状态一致性机制.html"
+  },
+  {
     "title": "不要把 NFS 作为高 I/O 服务的 Data Root：一次踩坑与原理解析",
     "date": "2026.07.20",
     "author": "jack-li",
