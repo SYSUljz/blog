@@ -5,8 +5,16 @@
     <link>https://SYSUljz.github.io/blog</link>
     <description>Jack-Li&apos;s Blog</description>
     <language>zh-CN</language>
-    <lastBuildDate>Sat, 05 Sep 2026 15:14:07 GMT</lastBuildDate>
+    <lastBuildDate>Mon, 21 Sep 2026 13:52:27 GMT</lastBuildDate>
     <atom:link href="https://SYSUljz.github.io/blog/rss.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>为什么 C++ 没有一个“最好”的网络库？</title>
+      <link>https://SYSUljz.github.io/blog/blog/网络编程/异步编程&amp;网络编程的一点思考.html</link>
+      <guid isPermaLink="true">https://SYSUljz.github.io/blog/blog/网络编程/异步编程&amp;网络编程的一点思考.html</guid>
+      <pubDate>Sun, 20 Sep 2026 00:00:00 GMT</pubDate>
+      <dc:creator>jack</dc:creator>
+      <category>网络编程</category>
+    </item>
     <item>
       <title>优秀 C++ 代码赏析：bRPC 中的多线程一致性保障机制</title>
       <link>https://SYSUljz.github.io/blog/blog/网络编程/bRPC中的状态一致性机制.html</link>

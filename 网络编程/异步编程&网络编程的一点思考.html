@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" href="/blog/dist/favicon.ico">
+    <link rel="apple-touch-icon" href="/blog/dist/favicon.png">
+    <link rel="stylesheet" type="text/css" href="/blog/dist/highlight.css">
+    <link rel="stylesheet" type="text/css" href="/blog/dist/katex.min.css">
+    <link rel="stylesheet" type="text/css" href="/blog/dist/main.css">
+    <title>为什么 C++ 没有一个“最好”的网络库？ | Jack-Li's Blog</title>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-GQ26H3JQ3G"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-GQ26H3JQ3G');
+    </script>
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <a href="/blog/" class="site-title">Jack-Li's Blog</a>
+      </header>
+
+      <div class="container">
+        <aside class="sidebar">
+          <div class="sidebar-title">分类目录</div>
+          <nav>
+            <ul>
+              <li>
+                <a href="/blog/" class="category-link" data-tag="">全部文章</a>
+              </li>
+              <li>
+                <a href="/blog/#/网络编程" class="category-link" data-tag="网络编程">网络编程</a>
+              </li>
+              <li>
+                <a href="/blog/#/运维小记" class="category-link" data-tag="运维小记">运维小记</a>
+              </li>
+              <li>
+                <a href="/blog/#/ex-opt" class="category-link" data-tag="ex-opt">ex-opt</a>
+              </li>
+              <li>
+                <a href="/blog/#/about-me" class="category-link" data-tag="about-me">about-me</a>
+              </li>
+            </ul>
+          </nav>
+        </aside>
+
+        <main class="content">
+          <div class="title">
+            <h1> 为什么 C++ 没有一个“最好”的网络库？ </h1>
+          </div>
+          <div class="info">
+            <div class="date"> 2026.9.20 </div>
+            <a href="https://github.com/jack">
+              <div class="author"> jack </div>
+            </a>
+          </div>
+
+          <div class="markdown">
+            <h2 id="写在前面" tabindex="-1"><a href="#%E5%86%99%E5%9C%A8%E5%89%8D%E9%9D%A2">写在前面</a></h2>
+<p>网络是计算机发展过程中最重要的基础设施之一。</p>
+<p>从阻塞 Socket，到 <code>select/poll</code>，再到 <code>epoll</code>、<code>kqueue</code>、IOCP，以及近年来 Linux 上的 <code>io_uring</code>，操作系统提供网络能力的方式不断变化，而这些变化也反过来影响了编程语言和运行时的设计。</p>
+<p>很多刚接触 C++ 网络开发的人都会产生一个疑问：</p>
+<blockquote>
+<p>为什么 C++ 发展了这么多年，却始终没有一个公认的“最佳网络库”？</p>
+</blockquote>
+<p>Java 服务端开发中有 Netty，Go 语言本身就提供 goroutine 和网络运行时，Rust 生态中 Tokio 也占据了非常重要的位置。</p>
+<p>但 C++ 不同。</p>
+<p>在 C++ 中，不仅网络库很多，甚至连最基本的线程模型和异步模型都没有统一。</p>
+<p>大致可以看到以下几条路线：</p>
+<ol>
+<li>
+<p><strong>Thread-Per-Core</strong></p>
+<p>典型代表是 Seastar。</p>
+<p>每个 CPU Core 运行自己的 EventLoop 和任务调度器，尽量避免线程迁移和跨核共享。</p>
+</li>
+<li>
+<p><strong>通用异步 I/O</strong></p>
+<p>典型代表是 Boost.Asio。</p>
+<p>目标是在 Windows、Linux、macOS 等不同操作系统之上提供统一的异步 I/O 抽象。</p>
+</li>
+<li>
+<p><strong>One Loop Per Thread / Multi-Reactor</strong></p>
+<p>典型代表是 Muduo。</p>
+<p>每个线程拥有自己的 EventLoop，连接在多个 Reactor 线程之间进行分配。</p>
+</li>
+<li>
+<p><strong>M:N 用户态线程</strong></p>
+<p>典型代表是 brpc 的 bthread。</p>
+<p>大量用户态线程运行在少量 pthread worker 之上，通过用户态调度提高并发能力。</p>
+</li>
+</ol>
+<p>除此之外，还有 libevent、libev、libuv、Folly、ACE、uWebSockets 等大量网络或事件驱动基础设施。</p>
+<p>简单列举如下：</p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>跨平台</th>
+<th>异步</th>
+<th>主要模型</th>
+<th>特点 / 定位</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>libevent</td>
+<td>是</td>
+<td>是</td>
+<td>Reactor</td>
+<td>经典通用事件库</td>
+</tr>
+<tr>
+<td>libev</td>
+<td>Unix 为主</td>
+<td>是</td>
+<td>Reactor</td>
+<td>轻量事件循环</td>
+</tr>
+<tr>
+<td>libuv</td>
+<td>是</td>
+<td>是</td>
+<td>Event Loop + Thread Pool</td>
+<td>Node.js 底层 I/O 基础设施</td>
+</tr>
+<tr>
+<td>Boost.Asio</td>
+<td>是</td>
+<td>是</td>
+<td>Proactor 风格接口</td>
+<td>通用异步 I/O 抽象</td>
+</tr>
+<tr>
+<td>Muduo</td>
+<td>Linux</td>
+<td>是</td>
+<td>Multi-Reactor</td>
+<td>Linux 服务端网络库</td>
+</tr>
+<tr>
+<td>brpc</td>
+<td>Linux 为主</td>
+<td>是</td>
+<td>M:N bthread</td>
+<td>RPC + 用户态线程</td>
+</tr>
+<tr>
+<td>Seastar</td>
+<td>Linux 为主</td>
+<td>是</td>
+<td>Thread-Per-Core</td>
+<td>Shared-Nothing、高性能 Runtime</td>
+</tr>
+<tr>
+<td>Folly</td>
+<td>Linux 为主</td>
+<td>是</td>
+<td>EventBase / Future / Coroutine</td>
+<td>Meta 基础设施库</td>
+</tr>
+<tr>
+<td>ACE</td>
+<td>是</td>
+<td>是</td>
+<td>Reactor / Proactor</td>
+<td>老牌 C++ 网络框架</td>
+</tr>
+<tr>
+<td>uWebSockets</td>
+<td>是</td>
+<td>是</td>
+<td>Event Loop</td>
+<td>HTTP / WebSocket、高性能网络服务</td>
+</tr>
+</tbody>
+</table>
+<p>这些项目都很成熟，但它们解决的并不是完全相同的问题。</p>
+<hr>
+<h2 id="为什么这些模型不能最终统一成一个“最佳网络库”？" tabindex="-1"><a href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E4%BA%9B%E6%A8%A1%E5%9E%8B%E4%B8%8D%E8%83%BD%E6%9C%80%E7%BB%88%E7%BB%9F%E4%B8%80%E6%88%90%E4%B8%80%E4%B8%AA%E2%80%9C%E6%9C%80%E4%BD%B3%E7%BD%91%E7%BB%9C%E5%BA%93%E2%80%9D%EF%BC%9F">为什么这些模型不能最终统一成一个“最佳网络库”？</a></h2>
+<h3 id="是否允许阻塞任务" tabindex="-1"><a href="#%E6%98%AF%E5%90%A6%E5%85%81%E8%AE%B8%E9%98%BB%E5%A1%9E%E4%BB%BB%E5%8A%A1">是否允许阻塞任务</a></h3>
+<p>以 Seastar 为代表的 Thread-Per-Core 模型追求极低的线程切换、锁竞争和跨核通信开销。</p>
+<p>EventLoop 和任务通常固定在某个 CPU Core 上执行。</p>
+<p>这样可以获得很好的 Cache Locality，也能减少传统多线程程序中的锁和线程迁移成本。</p>
+<p>代价也很明显：</p>
+<blockquote>
+<p>运行在 EventLoop 上的任务不能随意阻塞。</p>
+</blockquote>
+<p>一旦某个任务执行长时间 CPU 计算或者阻塞系统调用，同一个 Core 上的其他任务都会受到影响。</p>
+<p>而 brpc 的 bthread、传统线程池等模型，则愿意承担更多调度成本，以换取对同步和阻塞代码更好的兼容性。</p>
+<p>这本身就是两种不同的设计取向。</p>
+<hr>
+<h3 id="是否需要跨平台" tabindex="-1"><a href="#%E6%98%AF%E5%90%A6%E9%9C%80%E8%A6%81%E8%B7%A8%E5%B9%B3%E5%8F%B0">是否需要跨平台</a></h3>
+<p>不同操作系统提供的事件机制并不相同。</p>
+<p>Linux 有epoll，io_uring，BSD 和 macOS 有kqueue，Windows 有IOCP
+如果一个网络库只服务于 Linux，那么它完全可以针对 Linux 内核能力进行深度优化。</p>
+<p>而如果像 Boost.Asio 一样希望提供统一的跨平台 API，就必须在不同操作系统机制之上建立额外的抽象层。</p>
+<hr>
+<h3 id="reactor-还是-proactor" tabindex="-1"><a href="#reactor-%E8%BF%98%E6%98%AF-proactor">Reactor 还是 Proactor</a></h3>
+<p>传统的 <code>epoll</code>、<code>kqueue</code> 更接近 Reactor：</p>
+<blockquote>
+<p>操作系统告诉你某个 fd 已经 Ready，然后应用程序自己执行 <code>read/write</code>。</p>
+</blockquote>
+<p>IOCP 以及部分 <code>io_uring</code> 使用方式则更接近 Completion-Based I/O：</p>
+<blockquote>
+<p>应用提交操作，之后等待操作完成通知。</p>
+</blockquote>
+<p>Boost.Asio 在 API 层提供了统一的异步操作模型，但不同平台的底层实现仍然可能完全不同。</p>
+<p>这也意味着任何跨模型抽象都需要付出一定的状态管理和实现复杂度。至于asio为包装epoll付出的代价不在本文讨论范畴。</p>
+<hr>
+<h3 id="timer-如何实现" tabindex="-1"><a href="#timer-%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0">Timer 如何实现</a></h3>
+<p>计时无处不在：</p>
+<ul>
+<li>连接超时</li>
+<li>RPC Timeout</li>
+<li>KeepAlive</li>
+<li>重连</li>
+<li>心跳</li>
+<li>定时任务</li>
+</ul>
+<p>常见实现主要包括最小堆和时间轮。</p>
+<p>最小堆的插入和删除通常是：<code>O(log N)</code></p>
+<p>但实现简单，而且数组实现具有较好的内存连续性。
+时间轮在大量 Timer 场景中可以获得接近：<code>O(1)</code>的插入和删除复杂度。
+但它同时需要处理时间粒度、Bucket 和多层时间轮等问题。</p>
+<p>因此即使只是 Timer，也很难存在一个对所有场景都最优的数据结构。</p>
+<hr>
+<h2 id="一个好的网络库是否一定要是异步-runtime？" tabindex="-1"><a href="#%E4%B8%80%E4%B8%AA%E5%A5%BD%E7%9A%84%E7%BD%91%E7%BB%9C%E5%BA%93%E6%98%AF%E5%90%A6%E4%B8%80%E5%AE%9A%E8%A6%81%E6%98%AF%E5%BC%82%E6%AD%A5-runtime%EF%BC%9F">一个好的网络库是否一定要是异步 Runtime？</a></h2>
+<p>一种思路认为：</p>
+<blockquote>
+<p>网络库应该尽可能简单，只负责高效网络 I/O。</p>
+</blockquote>
+<p>线程如何组织、任务如何调度、业务代码是否使用协程，都应该由使用者决定。</p>
+<p>另一种思路则认为：</p>
+<blockquote>
+<p>网络 I/O、Timer、任务调度和 Coroutine 本来就应该属于同一个异步 Runtime。</p>
+</blockquote>
+<p>现代网络框架越来越倾向于后者。</p>
+<p>因为当网络服务复杂到一定程度以后：
+网络 I/O，Timer， RPC，文件 I/O，数据库IO，实际上很难完全割裂。</p>
+<p>但是 Runtime 越完整，也意味着使用者必须接受更多编码规则。</p>
+<h2 id="写在最后" tabindex="-1"><a href="#%E5%86%99%E5%9C%A8%E6%9C%80%E5%90%8E">写在最后</a></h2>
+<p>现在再回到最开始的问题：</p>
+<blockquote>
+<p>为什么 C++ 没有一个公认最好的网络库？</p>
+</blockquote>
+<p>原因可能并不是 C++ 网络生态不够成熟。</p>
+<p>恰恰相反。</p>
+<p>正是因为 C++ 被用于太多完全不同的领域，不同场景对网络和并发模型的要求差异太大，才形成了今天这种多种架构长期并存的状态。</p>
+<blockquote>
+<p><strong>你的程序到底需要什么？</strong></p>
+</blockquote>
+<p>只有开发者自己能够回答。</p>
+
+          </div>
+          <script src="https://giscus.app/client.js"
+      data-repo="SYSUljz/blog"
+      data-repo-id="MDEwOlJlcG9zaXRvcnk4MDc5ODgwNg=="
+      data-category="Announcements"
+      data-category-id="DIC_kwDOBNDkVs4CA6GQ"
+      data-mapping="title"
+      data-reactions-enabled="0"
+      data-emit-metadata="0"
+      data-input-position="bottom"
+      data-theme="preferred_color_scheme"
+      data-lang="en"
+      crossorigin="anonymous"
+      async>
+    </script>
+        </main>
+      </div>
+
+      <footer class="footer">
+        <div class="license">
+          Except where otherwise noted, content on this site is licensed under a <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> license.
+        </div>
+        <div class="copyright">
+          Copyright©2017 SYSUljz, All Rights Reserved. Powered by <a href="https://pages.github.com/">GitHub Pages</a> and <a href="https://github.com/features/actions">GitHub Actions</a>.
+        </div>
+      </footer>
+    </div>
+    <script src="/blog/dist/main.js"></script>
+  </body>
+</html>
