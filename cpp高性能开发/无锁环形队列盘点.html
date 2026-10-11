@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" href="/blog/dist/favicon.ico">
+    <link rel="apple-touch-icon" href="/blog/dist/favicon.png">
+    <link rel="stylesheet" type="text/css" href="/blog/dist/highlight.css">
+    <link rel="stylesheet" type="text/css" href="/blog/dist/katex.min.css">
+    <link rel="stylesheet" type="text/css" href="/blog/dist/main.css">
+    <title>cpp无锁环形队列（MPMCc&WorkSteal queue）的实现 | Jack-Li's Blog</title>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-GQ26H3JQ3G"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-GQ26H3JQ3G');
+    </script>
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <a href="/blog/" class="site-title">Jack-Li's Blog</a>
+      </header>
+
+      <div class="container">
+        <aside class="sidebar">
+          <div class="sidebar-title">分类目录</div>
+          <nav>
+            <ul>
+              <li>
+                <a href="/blog/" class="category-link" data-tag="">全部文章</a>
+              </li>
+              <li>
+                <a href="/blog/#/网络编程" class="category-link" data-tag="网络编程">网络编程</a>
+              </li>
+              <li>
+                <a href="/blog/#/cpp高性能开发" class="category-link" data-tag="cpp高性能开发">cpp高性能开发</a>
+              </li>
+              <li>
+                <a href="/blog/#/运维小记" class="category-link" data-tag="运维小记">运维小记</a>
+              </li>
+              <li>
+                <a href="/blog/#/ex-opt" class="category-link" data-tag="ex-opt">ex-opt</a>
+              </li>
+              <li>
+                <a href="/blog/#/about-me" class="category-link" data-tag="about-me">about-me</a>
+              </li>
+            </ul>
+          </nav>
+        </aside>
+
+        <main class="content">
+          <div class="title">
+            <h1> cpp无锁环形队列（MPMCc&WorkSteal queue）的实现 </h1>
+          </div>
+          <div class="info">
+            <div class="date"> 2026.09.05 </div>
+            <a href="https://github.com/jack-li">
+              <div class="author"> jack-li </div>
+            </a>
+          </div>
+
+          <div class="markdown">
+            <p>cpp是一门不得不自己造轮子的语言，在这其中并发安全的无锁队列无疑是开发者常常面对的棘手的难题。
+在面临特定的低延迟场景中如果确定不会发生队列溢出或者明确需要避免malloc动态扩展队列长度时，往往会使用环形队列。本文罗列cpp内存模型下无锁环形队列的实现，及不同场景下对应的不同，让读者了解到手写实现无锁环形队列中那些可能会踩的坑。</p>
+<p>在开始前先约定全文的游标定义：</p>
+<ul>
+<li><code>head_</code>：入队端 / 工作端（push 写入端，向前推进 <code>head_++</code>）；</li>
+<li><code>tail_</code>：出队端 / 消费端（pop 读出端，向前追赶 <code>tail_++</code>）；</li>
+<li>队列中的有效数据区间为 <code>[tail_, head_)</code>，队列中元素数量为 <code>head_ - tail_</code>。</li>
+</ul>
+<p>很容易想到的最简雏形，是通过 CAS 抢占 <code>head_</code> / <code>tail_</code> 来分配槽位：</p>
+<pre class="language-cpp"><code class="language-cpp"><span class="token keyword">class</span> <span class="token class-name">Queue</span> <span class="token punctuation">{</span>
+  std<span class="token double-colon punctuation">::</span>atomic<span class="token operator">&lt;</span>size_t<span class="token operator">></span> head_<span class="token punctuation">{</span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+  std<span class="token double-colon punctuation">::</span>atomic<span class="token operator">&lt;</span>size_t<span class="token operator">></span> tail_<span class="token punctuation">{</span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+  std<span class="token double-colon punctuation">::</span>array<span class="token operator">&lt;</span>T<span class="token punctuation">,</span> Size<span class="token operator">></span> buffer_<span class="token punctuation">;</span>
+
+  <span class="token keyword">bool</span> <span class="token function">push</span><span class="token punctuation">(</span>T item<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    size_t head <span class="token operator">=</span> head_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    size_t tail <span class="token operator">=</span> tail_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_acquire<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>head <span class="token operator">-</span> tail <span class="token operator">&lt;</span> Size <span class="token operator">&amp;&amp;</span> head_<span class="token punctuation">.</span><span class="token function">compare_exchange_weak</span><span class="token punctuation">(</span>head<span class="token punctuation">,</span> head <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+      buffer_<span class="token punctuation">[</span>head <span class="token operator">%</span> Size<span class="token punctuation">]</span> <span class="token operator">=</span> std<span class="token double-colon punctuation">::</span><span class="token function">move</span><span class="token punctuation">(</span>item<span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+
+  <span class="token keyword">bool</span> <span class="token function">pop</span><span class="token punctuation">(</span>T<span class="token operator">&amp;</span> item<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    size_t tail <span class="token operator">=</span> tail_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    size_t head <span class="token operator">=</span> head_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_acquire<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>tail <span class="token operator">&lt;</span> head <span class="token operator">&amp;&amp;</span> tail_<span class="token punctuation">.</span><span class="token function">compare_exchange_weak</span><span class="token punctuation">(</span>tail<span class="token punctuation">,</span> tail <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+      item <span class="token operator">=</span> std<span class="token double-colon punctuation">::</span><span class="token function">move</span><span class="token punctuation">(</span>buffer_<span class="token punctuation">[</span>tail <span class="token operator">%</span> Size<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span>
+</code></pre>
+<p>初看似乎通过比较 <code>head - tail</code> 解决了套圈问题，但多线程并发下这里有致命缺陷：<strong>CAS 只是抢到了槽位的下标，并不代表槽位中的数据已经准备好了。</strong></p>
+<p>并发环境下 buffer 槽位的读写是一个三状态过程：</p>
+<ul>
+<li>写入端不是瞬间完成的：它必然经历 <strong>未写（空闲） <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span></eq> 正在写（占用中） <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span></eq> 已写入（数据就绪）</strong>；</li>
+<li>读出端同样如此：经历 <strong>未读（就绪） <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span></eq> 正在读（占用中） <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span></eq> 已读出（空闲）</strong>。</li>
+</ul>
+<p><strong>为了表达这三个状态、同时抵御线程挂起导致的“套圈”，必须引入版本号（sequence）。</strong> 这正是 Dmitry Vyukov 经典 MPMC 环形队列的核心思想：为每个槽位维护一个单调推进的序列号，将槽位的状态转移与全局的入队/出队游标严格绑定。</p>
+<pre class="language-cpp"><code class="language-cpp"><span class="token keyword">class</span> <span class="token class-name">Queue</span> <span class="token punctuation">{</span>
+  <span class="token keyword">struct</span> <span class="token class-name">cell_t</span>
+  <span class="token punctuation">{</span>
+    std<span class="token double-colon punctuation">::</span>atomic<span class="token operator">&lt;</span>size_t<span class="token operator">></span>   sequence_<span class="token punctuation">;</span>
+    T                     data_<span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">;</span>
+  std<span class="token double-colon punctuation">::</span>atomic<span class="token operator">&lt;</span>size_t<span class="token operator">></span> head_<span class="token punctuation">{</span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+  std<span class="token double-colon punctuation">::</span>atomic<span class="token operator">&lt;</span>size_t<span class="token operator">></span> tail_<span class="token punctuation">{</span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+  std<span class="token double-colon punctuation">::</span>array<span class="token operator">&lt;</span>cell_t<span class="token punctuation">,</span> Size<span class="token operator">></span> buffer_<span class="token punctuation">;</span>
+
+  <span class="token keyword">bool</span> <span class="token function">push</span><span class="token punctuation">(</span>T <span class="token keyword">const</span><span class="token operator">&amp;</span> data<span class="token punctuation">)</span>
+  <span class="token punctuation">{</span>
+    cell_t<span class="token operator">*</span> cell<span class="token punctuation">;</span>
+    size_t pos <span class="token operator">=</span> enqueue_pos_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token punctuation">;</span><span class="token punctuation">;</span><span class="token punctuation">)</span>
+    <span class="token punctuation">{</span>
+      cell <span class="token operator">=</span> <span class="token operator">&amp;</span>buffer_<span class="token punctuation">[</span>pos <span class="token operator">%</span> Size<span class="token punctuation">]</span><span class="token punctuation">;</span>
+      size_t seq <span class="token operator">=</span> 
+        cell<span class="token operator">-></span>sequence_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_acquire<span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token comment">// intptr_t 和 std::size_t 有相同位宽</span>
+      intptr_t dif <span class="token operator">=</span> <span class="token punctuation">(</span>intptr_t<span class="token punctuation">)</span>seq <span class="token operator">-</span> <span class="token punctuation">(</span>intptr_t<span class="token punctuation">)</span>pos<span class="token punctuation">;</span>
+      <span class="token keyword">if</span> <span class="token punctuation">(</span>dif <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>
+      <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>enqueue_pos_<span class="token punctuation">.</span><span class="token function">compare_exchange_weak</span>
+            <span class="token punctuation">(</span>pos<span class="token punctuation">,</span> pos <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">)</span>
+          <span class="token keyword">break</span><span class="token punctuation">;</span>
+      <span class="token punctuation">}</span>
+      <span class="token comment">//队列已满</span>
+      <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>dif <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+        <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+      <span class="token comment">// 其他的producer和consumer已经转了一圈</span>
+      <span class="token keyword">else</span>
+        pos <span class="token operator">=</span> enqueue_pos_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    cell<span class="token operator">-></span>data_ <span class="token operator">=</span> data<span class="token punctuation">;</span>
+    <span class="token comment">// +1 代表数据有效</span>
+    cell<span class="token operator">-></span>sequence_<span class="token punctuation">.</span><span class="token function">store</span><span class="token punctuation">(</span>pos <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_release<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+
+  <span class="token keyword">bool</span> <span class="token function">pop</span><span class="token punctuation">(</span>T<span class="token operator">&amp;</span> data<span class="token punctuation">)</span>
+  <span class="token punctuation">{</span>
+    cell_t<span class="token operator">*</span> cell<span class="token punctuation">;</span>
+    size_t pos <span class="token operator">=</span> dequeue_pos_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token punctuation">;</span><span class="token punctuation">;</span><span class="token punctuation">)</span>
+    <span class="token punctuation">{</span>
+      cell <span class="token operator">=</span> <span class="token operator">&amp;</span>buffer_<span class="token punctuation">[</span>pos <span class="token operator">%</span> Size<span class="token punctuation">]</span><span class="token punctuation">;</span>
+      size_t seq <span class="token operator">=</span> 
+        cell<span class="token operator">-></span>sequence_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_acquire<span class="token punctuation">)</span><span class="token punctuation">;</span>
+      intptr_t dif <span class="token operator">=</span> <span class="token punctuation">(</span>intptr_t<span class="token punctuation">)</span>seq <span class="token operator">-</span> <span class="token punctuation">(</span>intptr_t<span class="token punctuation">)</span><span class="token punctuation">(</span>pos <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token keyword">if</span> <span class="token punctuation">(</span>dif <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>
+      <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>dequeue_pos_<span class="token punctuation">.</span><span class="token function">compare_exchange_weak</span>
+            <span class="token punctuation">(</span>pos<span class="token punctuation">,</span> pos <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">)</span>
+          <span class="token keyword">break</span><span class="token punctuation">;</span>
+      <span class="token punctuation">}</span>
+      <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>dif <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+        <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+      <span class="token keyword">else</span>
+        pos <span class="token operator">=</span> dequeue_pos_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    data <span class="token operator">=</span> cell<span class="token operator">-></span>data_<span class="token punctuation">;</span>
+    cell<span class="token operator">-></span>sequence_<span class="token punctuation">.</span><span class="token function">store</span>
+      <span class="token punctuation">(</span>pos <span class="token operator">+</span> Size<span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_release<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+</code></pre>
+<h2 id="mpsc-下的变化" tabindex="-1"><a href="#mpsc-%E4%B8%8B%E7%9A%84%E5%8F%98%E5%8C%96">mpsc 下的变化</a></h2>
+<p>有些场景下，业务逻辑能保证带个consumer，即pop操作只在一个thread上被调用，在上文的mpmc的基础上能够进一步优化</p>
+<pre class="language-cpp"><code class="language-cpp">  <span class="token keyword">bool</span> <span class="token function">Pop</span><span class="token punctuation">(</span>T<span class="token operator">&amp;</span> data<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    cell_t<span class="token operator">*</span> cell <span class="token operator">=</span> <span class="token operator">&amp;</span>buffer_<span class="token punctuation">[</span>dequeue_pos_ <span class="token operator">&amp;</span> mask_<span class="token punctuation">]</span><span class="token punctuation">;</span>
+    std<span class="token double-colon punctuation">::</span>size_t seq <span class="token operator">=</span> cell<span class="token operator">-></span>sequence<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order<span class="token double-colon punctuation">::</span>acquire<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">auto</span> diff <span class="token operator">=</span> <span class="token generic-function"><span class="token function">static_cast</span><span class="token generic class-name"><span class="token operator">&lt;</span>std<span class="token double-colon punctuation">::</span>ptrdiff_t<span class="token operator">></span></span></span><span class="token punctuation">(</span>seq<span class="token punctuation">)</span> <span class="token operator">-</span> <span class="token generic-function"><span class="token function">static_cast</span><span class="token generic class-name"><span class="token operator">&lt;</span>std<span class="token double-colon punctuation">::</span>ptrdiff_t<span class="token operator">></span></span></span><span class="token punctuation">(</span>dequeue_pos_ <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>diff <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">[</span><span class="token punctuation">[</span>unlikely<span class="token punctuation">]</span><span class="token punctuation">]</span> <span class="token punctuation">{</span>
+      <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>  <span class="token comment">// queue empty</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment">// diff >= 0 的分支不会触发</span>
+    data <span class="token operator">=</span> std<span class="token double-colon punctuation">::</span><span class="token function">move</span><span class="token punctuation">(</span>cell<span class="token operator">-></span>data<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    cell<span class="token operator">-></span>sequence<span class="token punctuation">.</span><span class="token function">store</span><span class="token punctuation">(</span>dequeue_pos_ <span class="token operator">+</span> capacity_<span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_lelaxed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token operator">++</span>dequeue_pos_<span class="token punctuation">;</span>
+    <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+</code></pre>
+<h2 id="worksteal-queue" tabindex="-1"><a href="#worksteal-queue">WorkSteal queue</a></h2>
+<p>worksteal 场景下通常使用SPMC队列， 这里面有两个基本条件很重要：</p>
+<ol>
+<li>Owner线程的push和pop都发生在head端，窃取者线程（Thief Threads）只会发生tail端的pop（steal）</li>
+<li>worksteal 线程池中往往存放的是一个任务句柄（32/64位指针），所以可以将buffer特化为 std::atomic&lt;T&gt; _buffer[Size]; 保障读写的无锁原子性，当然代价是 T 只能存整数或裸指针。（现代硬件体系结构（如 x86-64、ARM64）的原子指令一般只支持 1-8 字节，部分架构带扩展指令（如 x86 的 CMPXCHG16B 或 ARM 的 LDXP/STXP）最多支持 16 字节，当然对任意类型的T，std::atomic&lt;T&gt; 的load/store操作都是具有原子性保障的，但是编译器是通过加入互斥锁来实现）</li>
+</ol>
+<p>在以上背景下，SPMC的buffer读写其实退化为了两个状态（未读/已读 和 未写/已写）， 回想MPMC的读写是三个状态 （未读/在读/已读），笔者认为可以将MPMC的版本号（sequence） 理解为是为了处理在读和在写的状态矛盾 另一部分是为了解决多线程MPMC下某个线程被挂起，而槽位被下一轮复用，所以如果同时解决读写的原子性和producer 或 consumer 任意一方是单线程的，即可不使用版本号就能保证并发安全。
+很容易就能想到以下程序</p>
+<pre class="language-cpp"><code class="language-cpp"><span class="token comment">// try_push 端(producer/owner)：</span>
+_head <span class="token operator">=</span> head_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+_tail <span class="token operator">=</span> tail_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_acquire<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">if</span> <span class="token punctuation">(</span>_head <span class="token operator">&lt;</span> _tail <span class="token operator">+</span> Size <span class="token operator">-</span> <span class="token number">1</span><span class="token punctuation">)</span>
+  buffer<span class="token punctuation">[</span>_head <span class="token operator">&amp;</span> BufferMask<span class="token punctuation">]</span><span class="token punctuation">.</span><span class="token function">store</span><span class="token punctuation">(</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">//  写入数据</span>
+  head_<span class="token punctuation">.</span><span class="token function">store</span><span class="token punctuation">(</span>_head <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_release<span class="token punctuation">)</span><span class="token punctuation">;</span>              <span class="token comment">//  发布新边界</span>
+
+<span class="token comment">// try_pop 端(producer/owner)：</span>
+_head <span class="token operator">=</span> head_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+_tail <span class="token operator">=</span> tail_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_acquire<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">if</span> <span class="token punctuation">(</span>_head <span class="token operator">></span> _tail<span class="token punctuation">)</span>
+<span class="token comment">// 如果此时有其他线程执行steal不保证后面 head > tail</span>
+  <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> <span class="token operator">=</span> buffer<span class="token punctuation">[</span><span class="token punctuation">(</span>_head <span class="token operator">-</span> <span class="token number">1</span><span class="token punctuation">)</span> <span class="token operator">&amp;</span> BufferMask<span class="token punctuation">]</span><span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 读取数据</span>
+  head_<span class="token punctuation">.</span><span class="token function">store</span><span class="token punctuation">(</span>_head <span class="token operator">-</span> <span class="token number">1</span><span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_release<span class="token punctuation">)</span><span class="token punctuation">;</span>             <span class="token comment">//  发布新边界</span>
+
+<span class="token comment">// steal 端(thief)：</span>
+_tail <span class="token operator">=</span> tail_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_acquire<span class="token punctuation">)</span><span class="token punctuation">;</span>
+_head <span class="token operator">=</span> head_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_acquire<span class="token punctuation">)</span><span class="token punctuation">;</span>                   <span class="token comment">//  获取同步</span>
+<span class="token keyword">if</span> <span class="token punctuation">(</span>_head <span class="token operator">></span> _tail<span class="token punctuation">)</span>
+  <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> <span class="token operator">=</span> buffer<span class="token punctuation">[</span>_tail <span class="token operator">&amp;</span> BufferMask<span class="token punctuation">]</span><span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">//  读取数据</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>tail_<span class="token punctuation">.</span><span class="token function">compare_exchange_strong</span><span class="token punctuation">(</span>_tail<span class="token punctuation">,</span> _tail <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_seq_cst<span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">)</span>
+    <span class="token comment">// CAS 抢到则成功偷取，CAS抢不到则返回失败    </span>
+</code></pre>
+<p>但是这样又产生了新的问题，cpu存在Store-Load 重排， pop 遇上其他线程上的steal如果发生重排会发生潜在的冲突：
+<strong>写未刷出，读已发生</strong>：在 <code>pop</code> 中，Owner 需要先将自己的边界往回缩（写入新边界 <code>head</code>），然后再读取 Thief 的位置 <code>tail</code> 确认队列是否还有剩余元素。而在 <code>steal</code> 端，Thief 也是先读取 <code>tail</code> 再读取 Owner 的边界 <code>head</code>。如果 CPU 发生了 Store-Load 重排，Owner 对新边界 <code>head</code> 的写入尚未刷新到总线对其他核可见，Owner 就已经提前读取了 Thief 的位置 <code>tail</code>；与此同时，Thief 也读到了 Owner 尚未缩小的旧 <code>head</code>。这会导致双方都判定“该槽位属于自己”，最终将同一个任务分别取出执行，导致并发重复消费！</p>
+<p>好直接看一下代码：</p>
+<pre class="language-cpp"><code class="language-cpp"><span class="token keyword">class</span> <span class="token class-name">BoundedWSQ</span> <span class="token punctuation">{</span>
+  <span class="token keyword">static</span> <span class="token keyword">constexpr</span> size_t BufferSize <span class="token operator">=</span> <span class="token number">1024</span><span class="token punctuation">;</span>
+  <span class="token keyword">static</span> <span class="token keyword">constexpr</span> size_t BufferMask <span class="token operator">=</span> BufferSize <span class="token operator">-</span> <span class="token number">1</span><span class="token punctuation">;</span>
+
+  <span class="token keyword">alignas</span><span class="token punctuation">(</span><span class="token number">64</span><span class="token punctuation">)</span> std<span class="token double-colon punctuation">::</span>atomic<span class="token operator">&lt;</span><span class="token keyword">int64_t</span><span class="token operator">></span> head_<span class="token punctuation">{</span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span> <span class="token comment">// 工作端 (Owner 负责 push 和 pop)</span>
+  <span class="token keyword">alignas</span><span class="token punctuation">(</span><span class="token number">64</span><span class="token punctuation">)</span> std<span class="token double-colon punctuation">::</span>atomic<span class="token operator">&lt;</span><span class="token keyword">int64_t</span><span class="token operator">></span> tail_<span class="token punctuation">{</span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span> <span class="token comment">// 窃取端 (Thief 负责 steal)</span>
+              <span class="token keyword">int64_t</span>              cached_tail_<span class="token punctuation">{</span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+  <span class="token keyword">alignas</span><span class="token punctuation">(</span><span class="token number">64</span><span class="token punctuation">)</span> std<span class="token double-colon punctuation">::</span>atomic<span class="token operator">&lt;</span>T<span class="token operator">></span>       buffer_<span class="token punctuation">[</span>BufferSize<span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+<span class="token keyword">public</span><span class="token operator">:</span>
+  <span class="token keyword">bool</span> <span class="token function">try_push</span><span class="token punctuation">(</span>T item<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">int64_t</span> h <span class="token operator">=</span> head_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 乐观检查：先用本地缓存的 cached_tail_，避免跨核缓存失效开销</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>h <span class="token operator">-</span> cached_tail_ <span class="token operator">>=</span> BufferSize<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+      cached_tail_ <span class="token operator">=</span> tail_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_acquire<span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token keyword">if</span> <span class="token punctuation">(</span>h <span class="token operator">-</span> cached_tail_ <span class="token operator">>=</span> BufferSize<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span> <span class="token comment">// 队列满</span>
+      <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    buffer_<span class="token punctuation">[</span>h <span class="token operator">&amp;</span> BufferMask<span class="token punctuation">]</span><span class="token punctuation">.</span><span class="token function">store</span><span class="token punctuation">(</span>item<span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    head_<span class="token punctuation">.</span><span class="token function">store</span><span class="token punctuation">(</span>h <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_release<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+
+  T <span class="token function">pop</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">int64_t</span> h <span class="token operator">=</span> head_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span> <span class="token operator">-</span> <span class="token number">1</span><span class="token punctuation">;</span>
+    head_<span class="token punctuation">.</span><span class="token function">store</span><span class="token punctuation">(</span>h<span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    std<span class="token double-colon punctuation">::</span><span class="token function">atomic_thread_fence</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_seq_cst<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 阻断 Store-Load 重排</span>
+    <span class="token keyword">int64_t</span> t <span class="token operator">=</span> tail_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>t <span class="token operator">&lt;=</span> h<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+      T item <span class="token operator">=</span> buffer_<span class="token punctuation">[</span>h <span class="token operator">&amp;</span> BufferMask<span class="token punctuation">]</span><span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token keyword">if</span> <span class="token punctuation">(</span>t <span class="token operator">==</span> h<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment">// 队列只剩最后一个元素，与可能的 Thief 竞争 tail</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>tail_<span class="token punctuation">.</span><span class="token function">compare_exchange_strong</span><span class="token punctuation">(</span>t<span class="token punctuation">,</span> t <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">,</span>
+              std<span class="token double-colon punctuation">::</span>memory_order_seq_cst<span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+          item <span class="token operator">=</span> <span class="token keyword">nullptr</span><span class="token punctuation">;</span> <span class="token comment">// 已经被 Thief 偷走</span>
+        <span class="token punctuation">}</span>
+        head_<span class="token punctuation">.</span><span class="token function">store</span><span class="token punctuation">(</span>h <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token punctuation">}</span>
+      <span class="token keyword">return</span> item<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    head_<span class="token punctuation">.</span><span class="token function">store</span><span class="token punctuation">(</span>h <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 队列为空，恢复 head</span>
+    <span class="token keyword">return</span> <span class="token keyword">nullptr</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+
+  T <span class="token function">steal</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">int64_t</span> t <span class="token operator">=</span> tail_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_acquire<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    std<span class="token double-colon punctuation">::</span><span class="token function">atomic_thread_fence</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_seq_cst<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">int64_t</span> h <span class="token operator">=</span> head_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_acquire<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>t <span class="token operator">&lt;</span> h<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+      T item <span class="token operator">=</span> buffer_<span class="token punctuation">[</span>t <span class="token operator">&amp;</span> BufferMask<span class="token punctuation">]</span><span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>tail_<span class="token punctuation">.</span><span class="token function">compare_exchange_strong</span><span class="token punctuation">(</span>t<span class="token punctuation">,</span> t <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">,</span>
+            std<span class="token double-colon punctuation">::</span>memory_order_seq_cst<span class="token punctuation">,</span> std<span class="token double-colon punctuation">::</span>memory_order_relaxed<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token keyword">nullptr</span><span class="token punctuation">;</span> <span class="token comment">// CAS 抢输，返回失败</span>
+      <span class="token punctuation">}</span>
+      <span class="token keyword">return</span> item<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">return</span> <span class="token keyword">nullptr</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span>
+</code></pre>
+<h3 id="pop-和-steal-并发问题" tabindex="-1"><a href="#pop-%E5%92%8C-steal-%E5%B9%B6%E5%8F%91%E9%97%AE%E9%A2%98">pop 和 steal 并发问题</a></h3>
+<p>WSQ 最最绕的地方，就是 Owner 的 <code>pop</code> 和 Thief 的 <code>steal</code> 在只剩最后一个元素时的争抢的。</p>
+<ol>
+<li><strong>先减 <code>head_</code> 占坑</strong>：有效区间是 <code>[tail, head)</code>。如果 Owner 先去读 <code>tail_</code> 看有没有元素再减 <code>head_</code>，万一读完瞬间线程被切走，这期间 thief 们把任务全偷光了，Owner 醒来再减 <code>head_</code> 拿数据就会拿到脏数据。所以 Owner 得先把 <code>head_</code> 减 1 缩减范围，告诉后面的小偷别碰这个位置。</li>
+<li><strong>steal 是分步的</strong>（先读 <code>tail</code>，再读 <code>head</code> 确认非空，最后 CAS 推进 <code>tail</code>）。在 Owner 减 <code>head_</code> 前的一瞬间，可能已经有某个 thief 读到了旧的 <code>head</code>，正准备执行 CAS。如果 Owner 发现 <code>t == h</code>（只剩最后一份数据）还不去抢 <code>tail</code>，steal 紧接着 CAS 也成功，这个任务就会被两边各执行一次，所以 Owner 去 CAS 抢 <code>tail_ + 1</code>，就是为了把小偷手里的 CAS 预期值破坏掉。抢赢了独占任务，抢输了说明小偷已经先得手了，Owner 认输把 <code>head_</code> 加回去就行。</li>
+<li><strong>内存屏障</strong>：在写完 <code>head_</code> 和读 <code>tail_</code> 之间必须插一条 <code>seq_cst</code> fence，防止硬件把 Store-Load 乱序，确保两边的最新状态能及时对齐。</li>
+</ol>
+<hr>
+<h2 id="总结" tabindex="-1"><a href="#%E6%80%BB%E7%BB%93">总结</a></h2>
+<ol>
+<li><strong>MPMC 队列</strong>：本质上是用每个槽位的 <strong><code>sequence</code>（版本号）</strong> 来充当细粒度的状态机，配合 CAS 来保证没有并发冲突与套圈问题。Vyukov 的 MPMC Queue 逻辑较规则，完全可以自己手写实现并应用到通用线程池中。</li>
+<li><strong>Work-Stealing Queue（Chase-Lev WSQ）</strong>：则是借助 <code>std::atomic&lt;T&gt;</code> 本身的原子读写（要求存指针或整数等满足平凡拷贝的类型），配合各个特定位置的内存屏障（如 <code>seq_cst</code> fence 解决 Store-Load 乱序）来保障并发安全。它最大的复杂度就在于 Owner 本地 pop 和 Thief 并发 steal 在单元素时的冲突问题，通过让 pop 先减 <code>head_</code> 后 CAS 抢 <code>tail_</code> 解决。对于 Work-Stealing 这种涉及双端操作和复杂边界的队列，细节很多，工程实践中还是尽量参考成熟的工业级实现。</li>
+</ol>
+<p>参考实现：</p>
+<ul>
+<li>Dmitry Vyukov MPMC Bounded Queue: <a href="https://github.com/craflin/LockFreeQueue/blob/master/mpmc_bounded_queue.h">https://github.com/craflin/LockFreeQueue/blob/master/mpmc_bounded_queue.h</a></li>
+<li>Taskflow Work-Stealing Queue: <a href="https://github.com/taskflow/work-stealing-queue/blob/master/wsq.hpp">https://github.com/taskflow/work-stealing-queue/blob/master/wsq.hpp</a></li>
+</ul>
+
+          </div>
+          <script src="https://giscus.app/client.js"
+      data-repo="SYSUljz/blog"
+      data-repo-id="MDEwOlJlcG9zaXRvcnk4MDc5ODgwNg=="
+      data-category="Announcements"
+      data-category-id="DIC_kwDOBNDkVs4CA6GQ"
+      data-mapping="title"
+      data-reactions-enabled="0"
+      data-emit-metadata="0"
+      data-input-position="bottom"
+      data-theme="preferred_color_scheme"
+      data-lang="en"
+      crossorigin="anonymous"
+      async>
+    </script>
+        </main>
+      </div>
+
+      <footer class="footer">
+        <div class="license">
+          Except where otherwise noted, content on this site is licensed under a <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> license.
+        </div>
+        <div class="copyright">
+          Copyright©2017 SYSUljz, All Rights Reserved. Powered by <a href="https://pages.github.com/">GitHub Pages</a> and <a href="https://github.com/features/actions">GitHub Actions</a>.
+        </div>
+      </footer>
+    </div>
+    <script src="/blog/dist/main.js"></script>
+  </body>
+</html>

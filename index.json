@@ -10,6 +10,16 @@
     "url_path": "/blog/网络编程/异步编程&网络编程的一点思考.html"
   },
   {
+    "title": "cpp无锁环形队列（MPMCc&WorkSteal queue）的实现",
+    "date": "2026.09.05",
+    "author": "jack-li",
+    "tags": [
+      "cpp高性能开发"
+    ],
+    "filename": "无锁环形队列盘点",
+    "url_path": "/blog/cpp高性能开发/无锁环形队列盘点.html"
+  },
+  {
     "title": "前言",
     "date": "2026.09.05",
     "author": "jack-li",
